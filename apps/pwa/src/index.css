@@ -1,12 +1,17 @@
+/* apps/pwa/src/index.css */
+/* Paleta Clara Premium para Hamburger Rapid Mobile PWA */
 :root {
-  --primary: #2563eb;
-  --primary-hover: #1d4ed8;
-  --bg: #090d16;
-  --surface: #131b2e;
-  --surface-border: #1e293b;
-  --text: #f8fafc;
-  --text-muted: #94a3b8;
+  --primary: #d97706;
+  --primary-hover: #b45309;
+  --primary-light: #fef3c7;
+  --primary-border: #fde68a;
+  --bg: #f8fafc;
+  --surface: #ffffff;
+  --surface-border: #e2e8f0;
+  --text: #0f172a;
+  --text-muted: #64748b;
   --success: #10b981;
+  --danger: #ef4444;
 }
 
 * {
@@ -18,31 +23,45 @@
 
 body {
   font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
-  background-color: #030712;
+  background-color: #f1f5f9;
   color: var(--text);
   min-height: 100vh;
   display: flex;
   justify-content: center;
+  align-items: stretch;
 }
 
 #root {
   width: 100%;
   max-width: 480px;
   min-height: 100vh;
-  background-color: var(--bg);
-  box-shadow: 0 0 40px rgba(0, 0, 0, 0.8);
+  background-color: #faf9f6;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
   display: flex;
   flex-direction: column;
   position: relative;
-  border-left: 1px solid rgba(255, 255, 255, 0.05);
-  border-right: 1px solid rgba(255, 255, 255, 0.05);
+  border-left: 1px solid #e2e8f0;
+  border-right: 1px solid #e2e8f0;
 }
 
+/* Animations */
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
 .fade-in {
-  animation: fadeIn 0.3s ease-out;
+  animation: fadeIn 0.25s ease-out forwards;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
 }

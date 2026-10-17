@@ -46,6 +46,20 @@ router.post('/products', async (req, res) => {
   }
 });
 
+// Toggle product availability
+router.patch('/products/:id/toggle', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updated = await db.toggleProductAvailability(id);
+    if (!updated) {
+      return res.status(404).json({ success: false, error: 'Producto no encontrado' });
+    }
+    res.json({ success: true, message: 'Disponibilidad actualizada', data: updated });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Delete product
 router.delete('/products/:id', async (req, res) => {
   try {
@@ -57,11 +71,40 @@ router.delete('/products/:id', async (req, res) => {
   }
 });
 
+// Consumer / Customer Metrics according to consumption
+router.get('/metrics/customers', (req, res) => {
+  try {
+    const metrics = db.getConsumerMetrics();
+    res.json({ success: true, data: metrics });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Orders (for PWA order simulation and Admin tracking)
+router.get('/orders', (req, res) => {
+  try {
+    const orders = db.getOrders();
+    res.json({ success: true, count: orders.length, data: orders });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.post('/orders', (req, res) => {
+  try {
+    const newOrder = db.createOrder(req.body);
+    res.status(201).json({ success: true, message: 'Orden simulada creada con éxito', data: newOrder });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Reset initial products
 router.post('/reset', async (req, res) => {
   try {
     await db.resetProducts();
-    res.json({ success: true, message: 'Datos demo restablecidos.' });
+    res.json({ success: true, message: 'Datos demo de Hamburger Rapid restablecidos.' });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
