@@ -31,7 +31,6 @@ function hasBuild(dir) {
 
 // 1. Mobile PWA under /app
 if (hasBuild(pwaPath)) {
-  app.get('/app', (req, res) => res.redirect(301, '/app/'));
   app.use('/app', express.static(pwaPath));
   app.get('/app/*', (req, res) => {
     res.sendFile(path.join(pwaPath, 'index.html'));
@@ -50,7 +49,6 @@ if (hasBuild(pwaPath)) {
 
 // 2. Control Panel under /admin
 if (hasBuild(adminPath)) {
-  app.get('/admin', (req, res) => res.redirect(301, '/admin/'));
   app.use('/admin', express.static(adminPath));
   app.get('/admin/*', (req, res) => {
     res.sendFile(path.join(adminPath, 'index.html'));
