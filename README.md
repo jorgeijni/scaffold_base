@@ -75,8 +75,18 @@ npm run install:all
 # 2. Compilar todas las aplicaciones y sincronizar en server/public
 npm run build:all
 
-# 3. Iniciar el servidor unificado
+# O compilar individualmente (sincroniza automáticamente en server/public):
+npm run build:pwa         # Compila y sincroniza la app móvil PWA
+npm run build:admin       # Compila y sincroniza el panel admin
+npm run build:ecommerce   # Compila y sincroniza el e-commerce
+
+# 3. Iniciar el servidor unificado de producción
 npm start
+
+# Modo Desarrollo Standalone:
+npm run dev:pwa           # Levanta la PWA en Vite (con proxy a :3000 para la API)
+npm run dev:admin         # Levanta el panel Admin en Vite (con proxy a :3000)
+npm run dev:ecommerce     # Levanta el e-commerce en Astro dev
 ```
 
 ### URLs de Acceso Local

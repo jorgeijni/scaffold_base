@@ -1,4 +1,4 @@
-const CACHE_NAME = 'nextcollege-pwa-v1';
+const CACHE_NAME = 'nextcollege-pwa-v2';
 const ASSETS_TO_CACHE = [
   '/app/',
   '/app/index.html',
@@ -31,19 +31,44 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  if (event.request.url.includes('/api/')) {
+  // Ignorar peticiones de API y utilidades internas de desarrollo Vite
+  if (
+    event.request.url.includes('/api/') ||
+    event.request.url.includes('/@vite') ||
+    event.request.url.includes('/@react-refresh') ||
+    event.request.url.includes('?v=')
+  ) {
     return;
   }
 
+  // Para navegaciones (HTML), estrategia Network-First para siempre cargar los bundles más recientes
+  if (event.request.mode === 'navigate' || event.request.destination === 'document') {
+    event.respondWith(
+      fetch(event.request)
+        .then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            const responseClone = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseClone));
+          }
+          return networkResponse;
+        })
+        .catch(() => caches.match(event.request).then((cached) => cached || caches.match('/app/index.html')))
+    );
+    return;
+  }
+
+  // Para recursos estáticos, buscar en caché y fallback a red
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
       if (cachedResponse) {
         return cachedResponse;
       }
-      return fetch(event.request).catch(() => {
-        if (event.request.mode === 'navigate') {
-          return caches.match('/app/index.html');
+      return fetch(event.request).then((networkResponse) => {
+        if (networkResponse && networkResponse.status === 200 && event.request.method === 'GET') {
+          const responseClone = networkResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseClone));
         }
+        return networkResponse;
       });
     })
   );

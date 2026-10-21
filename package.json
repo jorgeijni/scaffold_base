@@ -4,10 +4,14 @@
   "private": true,
   "description": "Scaffold profesional y Template Repository para webinars y masterclasses: E-commerce (Astro), PWA (React), Admin Dashboard (React), Node.js API y MySQL con CI/CD automatizado en Dokploy.",
   "scripts": {
+    "dev": "node server/src/app.js",
+    "dev:pwa": "npm run dev --prefix apps/pwa",
+    "dev:admin": "npm run dev --prefix apps/admin",
+    "dev:ecommerce": "npm run dev --prefix apps/ecommerce",
     "install:all": "npm install --prefix apps/ecommerce && npm install --prefix apps/pwa && npm install --prefix apps/admin && npm install --prefix server",
-    "build:ecommerce": "npm run build --prefix apps/ecommerce",
-    "build:pwa": "npm run build --prefix apps/pwa",
-    "build:admin": "npm run build --prefix apps/admin",
+    "build:ecommerce": "npm run build --prefix apps/ecommerce && node -e \"const fs=require('fs'); fs.mkdirSync('server/public/ecommerce', {recursive:true}); fs.cpSync('apps/ecommerce/dist', 'server/public/ecommerce', {recursive:true}); console.log('✅ Ecommerce sincronizado en server/public/ecommerce');\"",
+    "build:pwa": "npm run build --prefix apps/pwa && node -e \"const fs=require('fs'); fs.mkdirSync('server/public/pwa', {recursive:true}); fs.cpSync('apps/pwa/dist', 'server/public/pwa', {recursive:true}); console.log('✅ PWA sincronizada en server/public/pwa');\"",
+    "build:admin": "npm run build --prefix apps/admin && node -e \"const fs=require('fs'); fs.mkdirSync('server/public/admin', {recursive:true}); fs.cpSync('apps/admin/dist', 'server/public/admin', {recursive:true}); console.log('✅ Admin sincronizado en server/public/admin');\"",
     "build:all": "npm run build:ecommerce && npm run build:pwa && npm run build:admin && node -e \"const fs=require('fs'); fs.mkdirSync('server/public', {recursive:true}); fs.cpSync('apps/ecommerce/dist', 'server/public/ecommerce', {recursive:true}); fs.cpSync('apps/pwa/dist', 'server/public/pwa', {recursive:true}); fs.cpSync('apps/admin/dist', 'server/public/admin', {recursive:true}); console.log('✅ Artefactos sincronizados en server/public');\"",
     "server": "node server/src/app.js",
     "start": "node server/src/app.js"
