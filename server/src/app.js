@@ -4,6 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const db = require('./db');
 const apiRoutes = require('./routes/api');
+const idempiereRoutes = require('./routes/idempiere');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -18,6 +19,7 @@ app.use((req, res, next) => {
 });
 
 // API Endpoints
+app.use('/api/idempiere', idempiereRoutes);
 app.use('/api', apiRoutes);
 
 // Define paths for the 3 compiled frontends

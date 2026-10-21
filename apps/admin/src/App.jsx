@@ -1,4 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import LoginPage from './components/LoginPage';
+import ErpStatusModal from './components/ErpStatusModal';
 
 // Fallback data
 const INITIAL_FALLBACK_BURGERS = [
@@ -124,7 +127,9 @@ const INITIAL_FALLBACK_BURGERS = [
   }
 ];
 
-export default function App() {
+function AdminDashboardContent() {
+  const { user, isMock, logout } = useAuth();
+  const [isErpModalOpen, setIsErpModalOpen] = useState(false);
   const [activeSection, setActiveSection] = useState('burgers'); // 'burgers' | 'customers' | 'database' | 'orders'
   const [burgers, setBurgers] = useState(INITIAL_FALLBACK_BURGERS);
   const [customerMetrics, setCustomerMetrics] = useState(null);
@@ -370,8 +375,33 @@ export default function App() {
           </div>
         </div>
 
-        {/* Database Quick Pill & Actions */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+        {/* Database Quick Pill, ERP Gateway Pill, Actions & User Profile */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          
+          {/* ERP Connection Status Pill (iDempiere REST v1) */}
+          <div
+            onClick={() => setIsErpModalOpen(true)}
+            title="Haz clic para ver diagnóstico de sesión y token de iDempiere ERP"
+            style={{
+              background: isMock ? '#fef3c7' : '#dcfce7',
+              border: `1px solid ${isMock ? '#fde68a' : '#86efac'}`,
+              color: isMock ? '#92400e' : '#166534',
+              padding: '5px 12px',
+              borderRadius: '20px',
+              fontSize: '0.78rem',
+              fontWeight: '700',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              cursor: 'pointer',
+              transition: 'transform 0.15s'
+            }}
+          >
+            <span>{isMock ? '🟡' : '🟢'}</span>
+            <span>{isMock ? 'ERP: Resiliente' : 'iDempiere v1'}</span>
+            <span style={{ fontSize: '0.7rem', opacity: 0.75 }}>⚙️</span>
+          </div>
+
           <div style={{
             background: dbStatus?.mode === 'mysql' ? '#dcfce7' : '#fef3c7',
             border: `1px solid ${dbStatus?.mode === 'mysql' ? '#86efac' : '#fde68a'}`,
@@ -385,7 +415,7 @@ export default function App() {
             gap: '6px'
           }}>
             <span>{dbStatus?.mode === 'mysql' ? '🐬' : '⚡'}</span>
-            <span>{dbStatus?.mode === 'mysql' ? 'MySQL Conectado' : 'Modo In-Memory Activo'}</span>
+            <span>{dbStatus?.mode === 'mysql' ? 'MySQL' : 'In-Memory'}</span>
             {pingLatency !== null && <span style={{ opacity: 0.8 }}>({pingLatency}ms)</span>}
           </div>
 
@@ -402,7 +432,7 @@ export default function App() {
               cursor: 'pointer'
             }}
           >
-            🌱 Reset Demo
+            🌱 Reset
           </button>
 
           <a
@@ -412,16 +442,16 @@ export default function App() {
               border: '1px solid #cbd5e1',
               color: '#0f172a',
               textDecoration: 'none',
-              padding: '6px 14px',
+              padding: '6px 12px',
               borderRadius: '8px',
-              fontSize: '0.82rem',
+              fontSize: '0.8rem',
               fontWeight: '700',
               display: 'flex',
               alignItems: 'center',
               gap: '4px'
             }}
           >
-            🌐 E-commerce
+            🌐 Web
           </a>
 
           <a
@@ -430,9 +460,9 @@ export default function App() {
               background: 'linear-gradient(135deg, #d97706, #b45309)',
               color: '#ffffff',
               textDecoration: 'none',
-              padding: '6px 14px',
+              padding: '6px 12px',
               borderRadius: '8px',
-              fontSize: '0.82rem',
+              fontSize: '0.8rem',
               fontWeight: '700',
               display: 'flex',
               alignItems: 'center',
@@ -440,8 +470,65 @@ export default function App() {
               boxShadow: '0 2px 6px rgba(217, 119, 6, 0.25)'
             }}
           >
-            📱 PWA Móvil
+            📱 App
           </a>
+
+          {/* User Profile Badge & Logout */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            background: '#f1f5f9',
+            border: '1px solid #cbd5e1',
+            padding: '4px 10px 4px 6px',
+            borderRadius: '24px',
+            marginLeft: '4px'
+          }}>
+            <div style={{
+              width: '28px',
+              height: '28px',
+              borderRadius: '50%',
+              background: '#0f172a',
+              color: '#f59e0b',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '0.78rem',
+              fontWeight: '800'
+            }}>
+              {user?.userName ? user.userName.charAt(0).toUpperCase() : 'A'}
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              <span style={{ fontSize: '0.76rem', fontWeight: '800', color: '#0f172a', lineHeight: 1.1, maxWidth: '120px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {user?.userName || 'Admin'}
+              </span>
+              <span style={{ fontSize: '0.66rem', color: '#64748b', fontWeight: '600' }}>
+                {user?.roleName || 'GardenWorld'} &bull; {user?.orgName || 'HQ'}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                logout();
+                showToast('🔒 Sesión de iDempiere cerrada');
+              }}
+              title="Cerrar sesión de iDempiere"
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: '#ef4444',
+                fontSize: '0.9rem',
+                cursor: 'pointer',
+                padding: '2px 4px',
+                marginLeft: '2px',
+                display: 'flex',
+                alignItems: 'center'
+              }}
+            >
+              🚪
+            </button>
+          </div>
+
         </div>
       </header>
 
@@ -1517,6 +1604,12 @@ export default function App() {
         </div>
       )}
 
+      {/* Modal de Diagnóstico de iDempiere ERP */}
+      <ErpStatusModal
+        isOpen={isErpModalOpen}
+        onClose={() => setIsErpModalOpen(false)}
+      />
+
       {/* Footer del Dashboard */}
       <footer style={{
         background: '#ffffff',
@@ -1530,4 +1623,59 @@ export default function App() {
       </footer>
     </div>
   );
+}
+
+// Orquestador Principal con Provider y Gateway de Autenticación
+export default function App() {
+  return (
+    <AuthProvider>
+      <AdminAuthGateway />
+    </AuthProvider>
+  );
+}
+
+function AdminAuthGateway() {
+  const { isAuthenticated, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        background: 'radial-gradient(ellipse at top, #1e293b 0%, #0f172a 100%)',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: '#f8fafc',
+        fontFamily: "'Plus Jakarta Sans', system-ui, sans-serif"
+      }}>
+        <div style={{
+          width: '60px',
+          height: '60px',
+          borderRadius: '16px',
+          background: 'linear-gradient(135deg, #d97706, #b45309)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: '2rem',
+          marginBottom: '16px',
+          boxShadow: '0 10px 25px rgba(217, 119, 6, 0.4)'
+        }}>
+          🍔
+        </div>
+        <div style={{ fontSize: '1.25rem', fontWeight: '800', color: '#ffffff' }}>
+          Hamburger <span style={{ color: '#f59e0b' }}>Rapid</span>
+        </div>
+        <div style={{ fontSize: '0.82rem', color: '#94a3b8', marginTop: '6px' }}>
+          Verificando sesión iDempiere REST API v1...
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <LoginPage />;
+  }
+
+  return <AdminDashboardContent />;
 }

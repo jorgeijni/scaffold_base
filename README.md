@@ -72,6 +72,12 @@ scaffold_base/
   - Pool de conexiones (activas vs límite).
   - Conteo de entidades auditadas (products, customers, orders).
   - Botón de restablecimiento de datos demo.
+- **Autenticación & Control de Acceso con iDempiere ERP REST API v1:**
+  - **Login Directo Blindado:** Enrutamiento a `POST /api/v1/auth/tokens` con cabeceras `Content-Type: application/json` y `Accept: application/json`.
+  - **Estructura Estricta del Payload:** Empaquetado de contexto bajo `parameters` con `organizationId` obligatorio (evitando deserialización Java `LoginCredential`).
+  - **Presets Demo:** Carga rápida de credenciales para `GardenWorld Admin` (`admin @ gardenworld.com`, Client 11, Role 102, Org 11, Wh 103) y `SuperUser / System`.
+  - **Modo Resiliente / Contingencia:** Simulación transparente de tokens JWT si la instancia ERP remota no está accesible localmente.
+  - **Modal de Diagnóstico ERP:** Visualización de token Bearer en tiempo real, desglose de parámetros y test de latencia interactivo.
 
 ---
 
@@ -106,3 +112,6 @@ npm run dev:ecommerce     # Levanta el e-commerce en Astro dev
 - **API Catálogo de Productos:** `http://localhost:3000/api/products`
 - **API Métricas de Clientes:** `http://localhost:3000/api/metrics/customers`
 - **API Órdenes:** `http://localhost:3000/api/orders`
+- **Gateway iDempiere Auth:** `POST http://localhost:3000/api/idempiere/login`
+- **Gateway iDempiere Status:** `GET http://localhost:3000/api/idempiere/status`
+- **Gateway iDempiere Verify:** `POST http://localhost:3000/api/idempiere/verify`
