@@ -114,7 +114,7 @@ export default function SelectProfileModal({
                 Selecionar Perfil
               </h2>
               <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
-                iDempiere Open Source ERP &bull; <span style={{ color: '#38bdf8', fontWeight: '700' }}>{userName}</span>
+                Usuario: <span style={{ color: '#38bdf8', fontWeight: '700' }}>{userName}</span>
               </div>
             </div>
           </div>
@@ -323,7 +323,7 @@ export default function SelectProfileModal({
               color: '#7dd3fc',
               lineHeight: 1.4
             }}>
-              ℹ️ <strong>Ayuda iDempiere:</strong> Selecciona el perfil deseado y pulsa <strong>OK</strong> para conectar.
+              ℹ️ <strong>Ayuda:</strong> Selecciona el perfil deseado y pulsa <strong>OK</strong> para conectar.
             </div>
           )}
 

@@ -1,25 +1,25 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 
 export default function LoginPage() {
-  const { authenticateCredentials, login, pingErp } = useAuth();
+  const { authenticateCredentials, login } = useAuth();
 
   // Modo de Autenticación: 'direct' (1 Paso) o 'twoStep' (2 Pasos)
   const [authMode, setAuthMode] = useState('direct'); // 'direct' | 'twoStep'
   const [currentStep, setCurrentStep] = useState(1); // 1 = Credenciales, 2 = Seleccionar Perfil
 
-  // Credenciales
-  const [userName, setUserName] = useState('admin @ gardenworld.com');
-  const [password, setPassword] = useState('GardenAdmin');
-  const [baseUrl, setBaseUrl] = useState('http://localhost:8080');
-  const [allowFallback, setAllowFallback] = useState(true);
+  // Credenciales limpias (sin datos precargados)
+  const [userName, setUserName] = useState('');
+  const [password, setPassword] = useState('');
+  const [baseUrl] = useState('http://localhost:8080');
+  const [allowFallback] = useState(true);
 
   // Parámetros de Contexto para Login Directo
-  const [directClientId, setDirectClientId] = useState('11');
-  const [directRoleId, setDirectRoleId] = useState('102');
-  const [directOrgId, setDirectOrgId] = useState('11');
-  const [directWarehouseId, setDirectWarehouseId] = useState('103');
-  const [directLanguage, setDirectLanguage] = useState('en_US');
+  const [directClientId] = useState('11');
+  const [directRoleId] = useState('102');
+  const [directOrgId] = useState('11');
+  const [directWarehouseId] = useState('103');
+  const [directLanguage] = useState('en_US');
 
   // Parámetros seleccionados en Paso 2 (Flujo de 2 Pasos)
   const [profileData, setProfileData] = useState(null);
@@ -27,48 +27,26 @@ export default function LoginPage() {
   const [selectedRoleId, setSelectedRoleId] = useState(102);
   const [selectedOrgId, setSelectedOrgId] = useState(11);
   const [selectedWarehouseId, setSelectedWarehouseId] = useState(103);
-  const [selectedLanguage, setSelectedLanguage] = useState('pt_BR');
+  const [selectedLanguage, setSelectedLanguage] = useState('es_ES');
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
 
   // Estados UI
   const [showPassword, setShowPassword] = useState(false);
-  const [showAdvanced, setShowAdvanced] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState(null);
   const [errorDetail, setErrorDetail] = useState(null);
-  const [erpStatus, setErpStatus] = useState({ checked: false, online: false, latency: null });
 
-  // Comprobar estado de iDempiere
-  const checkStatus = async (url) => {
-    try {
-      const res = await pingErp(url || baseUrl);
-      setErpStatus({
-        checked: true,
-        online: !!res.online,
-        latency: res.latencyMs || null,
-        message: res.message
-      });
-    } catch {
-      setErpStatus({ checked: true, online: false, latency: null });
-    }
-  };
-
-  useEffect(() => {
-    checkStatus(baseUrl);
-  }, []);
-
-  // Prellenar credenciales GardenWorld
-  const fillGardenWorld = () => {
-    setErrorMessage(null);
-    setErrorDetail(null);
-    setUserName('admin @ gardenworld.com');
-    setPassword('GardenAdmin');
-    setDirectClientId('11');
-    setDirectRoleId('102');
-    setDirectOrgId('11');
-    setDirectWarehouseId('103');
-    setDirectLanguage('en_US');
+  // Sanitizador de mensajes para evitar exponer datos técnicos o nombres de backend
+  const sanitizeMessage = (text) => {
+    if (!text || typeof text !== 'string') return text;
+    return text
+      .replace(/idempiere/gi, 'servidor')
+      .replace(/http:\/\/[^\s]+/gi, '')
+      .replace(/https:\/\/[^\s]+/gi, '')
+      .replace(/REST API v1/gi, '')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
   };
 
   // 1. Envío de Login Directo (1 Paso)
@@ -93,8 +71,8 @@ export default function LoginPage() {
         allowFallback
       });
     } catch (err) {
-      setErrorMessage(err.message || 'Error en autenticación directa con iDempiere');
-      setErrorDetail(err.detail || null);
+      setErrorMessage(sanitizeMessage(err.message) || 'Error al iniciar sesión');
+      setErrorDetail(sanitizeMessage(err.detail) || null);
     } finally {
       setIsSubmitting(false);
     }
@@ -122,12 +100,11 @@ export default function LoginPage() {
       setSelectedRoleId(def.roleId || 102);
       setSelectedOrgId(def.organizationId || 11);
       setSelectedWarehouseId(def.warehouseId || 103);
-      setSelectedLanguage(def.language || 'pt_BR');
+      setSelectedLanguage(def.language || 'es_ES');
       setCurrentStep(2);
     } catch (err) {
-      // Bloqueo estricto si las credenciales son incorrectas (HTTP 401)
-      setErrorMessage(err.message || 'Error de credenciales en iDempiere');
-      setErrorDetail(err.detail || null);
+      setErrorMessage(sanitizeMessage(err.message) || 'Credenciales inválidas');
+      setErrorDetail(sanitizeMessage(err.detail) || null);
     } finally {
       setIsSubmitting(false);
     }
@@ -155,22 +132,22 @@ export default function LoginPage() {
         allowFallback
       });
     } catch (err) {
-      setErrorMessage(err.message || 'Error al iniciar sesión con el perfil seleccionado');
-      setErrorDetail(err.detail || null);
+      setErrorMessage(sanitizeMessage(err.message) || 'Error al iniciar sesión con el perfil seleccionado');
+      setErrorDetail(sanitizeMessage(err.detail) || null);
     } finally {
       setIsSubmitting(false);
     }
   };
 
   // Opciones para el Paso 2
-  const clients = profileData?.clients || [{ id: 11, name: 'GardenWorld' }, { id: 0, name: 'System' }];
-  const roles = profileData?.roles || [{ id: 102, clientId: 11, name: 'GardenWorld Admin' }];
-  const organizations = profileData?.organizations || [{ id: 11, clientId: 11, name: 'HQ' }, { id: 0, clientId: 11, name: '*' }];
-  const warehouses = profileData?.warehouses || [{ id: 103, orgId: 11, name: 'HQ Warehouse' }, { id: 0, orgId: 0, name: '(Sin Almacén)' }];
+  const clients = profileData?.clients || [{ id: 11, name: 'Principal' }, { id: 0, name: 'General' }];
+  const roles = profileData?.roles || [{ id: 102, clientId: 11, name: 'Administrador' }];
+  const organizations = profileData?.organizations || [{ id: 11, clientId: 11, name: 'Sede Principal' }, { id: 0, clientId: 11, name: '*' }];
+  const warehouses = profileData?.warehouses || [{ id: 103, orgId: 11, name: 'Almacén Principal' }, { id: 0, orgId: 0, name: '(Sin Almacén)' }];
   const languages = profileData?.languages || [
-    { code: 'pt_BR', name: 'Portuguese (BR)' },
+    { code: 'es_ES', name: 'Español (ES)' },
     { code: 'en_US', name: 'English (US)' },
-    { code: 'es_ES', name: 'Spanish (ES)' }
+    { code: 'pt_BR', name: 'Português (BR)' }
   ];
 
   const filteredRoles = roles.filter(r => r.clientId === undefined || r.clientId === selectedClientId);
@@ -184,7 +161,7 @@ export default function LoginPage() {
     setSelectedRoleId(def.roleId || 102);
     setSelectedOrgId(def.organizationId || 11);
     setSelectedWarehouseId(def.warehouseId || 103);
-    setSelectedLanguage(def.language || 'pt_BR');
+    setSelectedLanguage(def.language || 'es_ES');
     setSelectedDate(new Date().toISOString().split('T')[0]);
   };
 
@@ -222,10 +199,10 @@ export default function LoginPage() {
         pointerEvents: 'none'
       }} />
 
-      {/* Tarjeta Principal Dark Glassmorphic (Consistente en ambos casos) */}
+      {/* Tarjeta Principal Dark Glassmorphic */}
       <div style={{
         width: '100%',
-        maxWidth: '520px',
+        maxWidth: '500px',
         background: 'rgba(30, 41, 59, 0.85)',
         backdropFilter: 'blur(16px)',
         border: '1px solid rgba(255, 255, 255, 0.1)',
@@ -237,7 +214,7 @@ export default function LoginPage() {
       }}>
 
         {/* Encabezado con Isotipo */}
-        <div style={{ textAlign: 'center', marginBottom: '22px' }}>
+        <div style={{ textAlign: 'center', marginBottom: '24px' }}>
           <div style={{
             display: 'inline-flex',
             alignItems: 'center',
@@ -264,53 +241,17 @@ export default function LoginPage() {
           </h1>
 
           <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '8px',
-            fontSize: '0.84rem',
+            fontSize: '0.85rem',
             color: '#94a3b8',
             fontWeight: '500'
           }}>
             <span>Panel Administrativo</span>
-            <span>&bull;</span>
-            <span style={{ color: '#38bdf8', fontWeight: '700' }}>iDempiere ERP v1</span>
-          </div>
-
-          {/* Badge de Estado del Servidor iDempiere */}
-          <div style={{
-            marginTop: '12px',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '8px',
-            background: erpStatus.online ? 'rgba(16, 185, 129, 0.12)' : 'rgba(245, 158, 11, 0.12)',
-            border: `1px solid ${erpStatus.online ? 'rgba(16, 185, 129, 0.3)' : 'rgba(245, 158, 11, 0.3)'}`,
-            padding: '5px 12px',
-            borderRadius: '9999px',
-            fontSize: '0.74rem',
-            fontWeight: '700',
-            color: erpStatus.online ? '#34d399' : '#fbbf24'
-          }}>
-            <span style={{
-              width: '8px',
-              height: '8px',
-              borderRadius: '50%',
-              background: erpStatus.online ? '#10b981' : '#f59e0b',
-              boxShadow: erpStatus.online ? '0 0 8px #10b981' : '0 0 8px #f59e0b'
-            }} />
-            <span>
-              {erpStatus.checked
-                ? (erpStatus.online
-                    ? `iDempiere REST API v1 En Línea (${erpStatus.latency}ms)`
-                    : 'Modo Resiliente / Simulación de Contingencia')
-                : 'Verificando enlace ERP...'}
-            </span>
           </div>
         </div>
 
-        {/* Selector de Modo de Autenticación: Botón GardenWorld vs Botón Autenticación 2 Pasos */}
+        {/* Selector de Modo de Autenticación */}
         {!(authMode === 'twoStep' && currentStep === 2) && (
-          <div style={{ marginBottom: '18px' }}>
+          <div style={{ marginBottom: '20px' }}>
             <div style={{
               fontSize: '0.72rem',
               textTransform: 'uppercase',
@@ -319,25 +260,26 @@ export default function LoginPage() {
               fontWeight: '700',
               marginBottom: '8px'
             }}>
-              ⚡ MODO DE AUTENTICACIÓN ERP:
+              MODO DE ACCESO:
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
               
-              {/* Botón 1: GardenWorld Admin (Login Directo) */}
+              {/* Botón 1: Acceso Directo */}
               <button
                 type="button"
                 onClick={() => {
                   setAuthMode('direct');
                   setCurrentStep(1);
-                  fillGardenWorld();
+                  setErrorMessage(null);
+                  setErrorDetail(null);
                 }}
                 style={{
                   background: authMode === 'direct' ? 'rgba(217, 119, 6, 0.25)' : 'rgba(217, 119, 6, 0.08)',
                   border: `1px solid ${authMode === 'direct' ? '#f59e0b' : 'rgba(217, 119, 6, 0.3)'}`,
                   color: '#fef3c7',
-                  padding: '9px 10px',
+                  padding: '10px',
                   borderRadius: '10px',
-                  fontSize: '0.78rem',
+                  fontSize: '0.8rem',
                   fontWeight: '700',
                   cursor: 'pointer',
                   transition: 'all 0.2s',
@@ -348,10 +290,10 @@ export default function LoginPage() {
                   boxShadow: authMode === 'direct' ? '0 0 12px rgba(217, 119, 6, 0.25)' : 'none'
                 }}
               >
-                <span>👑</span> GardenWorld Admin
+                <span>⚡</span> Acceso Directo
               </button>
 
-              {/* Botón 2: Autenticación 2 Pasos (Reemplaza al botón superuser) */}
+              {/* Botón 2: Autenticación 2 Pasos */}
               <button
                 type="button"
                 onClick={() => {
@@ -364,9 +306,9 @@ export default function LoginPage() {
                   background: authMode === 'twoStep' ? 'rgba(2, 132, 199, 0.25)' : 'rgba(59, 130, 246, 0.08)',
                   border: `1px solid ${authMode === 'twoStep' ? '#38bdf8' : 'rgba(59, 130, 246, 0.3)'}`,
                   color: '#dbeafe',
-                  padding: '9px 10px',
+                  padding: '10px',
                   borderRadius: '10px',
-                  fontSize: '0.78rem',
+                  fontSize: '0.8rem',
                   fontWeight: '700',
                   cursor: 'pointer',
                   transition: 'all 0.2s',
@@ -383,7 +325,7 @@ export default function LoginPage() {
           </div>
         )}
 
-        {/* Mensaje de Error / Rechazo de Credenciales (HTTP 401) */}
+        {/* Mensaje de Error */}
         {errorMessage && (
           <div style={{
             background: 'rgba(239, 68, 68, 0.15)',
@@ -406,31 +348,31 @@ export default function LoginPage() {
           </div>
         )}
 
-        {/* CASO A: Formulario de Credenciales (Paso 1 para Directo o Paso 1 de 2 Pasos) */}
+        {/* CASO A: Formulario de Credenciales (Paso 1) */}
         {(authMode === 'direct' || (authMode === 'twoStep' && currentStep === 1)) && (
-          <form onSubmit={authMode === 'direct' ? handleDirectSubmit : handleTwoStepValidate} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          <form onSubmit={authMode === 'direct' ? handleDirectSubmit : handleTwoStepValidate} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             
             {/* Campo Usuario */}
             <div>
-              <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '700', marginBottom: '6px', color: '#cbd5e1' }}>
-                Usuario (userName)
+              <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: '700', marginBottom: '6px', color: '#cbd5e1' }}>
+                Usuario
               </label>
               <input
                 type="text"
                 required
                 value={userName}
                 onChange={(e) => setUserName(e.target.value)}
-                placeholder="admin @ gardenworld.com"
+                placeholder="Ingrese su usuario o correo"
                 style={{
                   width: '100%',
                   background: 'rgba(15, 23, 42, 0.7)',
                   border: '1px solid #334155',
                   borderRadius: '10px',
-                  padding: '10px 14px',
+                  padding: '11px 14px',
                   color: '#ffffff',
-                  fontSize: '0.9rem',
+                  fontSize: '0.92rem',
                   outline: 'none',
-                  fontFamily: 'monospace'
+                  boxSizing: 'border-box'
                 }}
                 onFocus={(e) => e.target.style.borderColor = '#d97706'}
                 onBlur={(e) => e.target.style.borderColor = '#334155'}
@@ -440,8 +382,8 @@ export default function LoginPage() {
             {/* Campo Contraseña */}
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                <label style={{ fontSize: '0.8rem', fontWeight: '700', color: '#cbd5e1' }}>
-                  Contraseña (password)
+                <label style={{ fontSize: '0.82rem', fontWeight: '700', color: '#cbd5e1' }}>
+                  Contraseña
                 </label>
                 <button
                   type="button"
@@ -450,7 +392,7 @@ export default function LoginPage() {
                     background: 'none',
                     border: 'none',
                     color: '#94a3b8',
-                    fontSize: '0.72rem',
+                    fontSize: '0.75rem',
                     cursor: 'pointer',
                     fontWeight: '600'
                   }}
@@ -463,112 +405,21 @@ export default function LoginPage() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
+                placeholder="Ingrese su contraseña"
                 style={{
                   width: '100%',
                   background: 'rgba(15, 23, 42, 0.7)',
                   border: '1px solid #334155',
                   borderRadius: '10px',
-                  padding: '10px 14px',
+                  padding: '11px 14px',
                   color: '#ffffff',
-                  fontSize: '0.9rem',
-                  outline: 'none'
+                  fontSize: '0.92rem',
+                  outline: 'none',
+                  boxSizing: 'border-box'
                 }}
                 onFocus={(e) => e.target.style.borderColor = '#d97706'}
                 onBlur={(e) => e.target.style.borderColor = '#334155'}
               />
-            </div>
-
-            {/* Ajustes de Servidor iDempiere */}
-            <div style={{ borderTop: '1px solid rgba(255, 255, 255, 0.08)', paddingTop: '10px' }}>
-              <button
-                type="button"
-                onClick={() => setShowAdvanced(!showAdvanced)}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: '#38bdf8',
-                  fontSize: '0.78rem',
-                  fontWeight: '700',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  padding: '2px 0'
-                }}
-              >
-                <span>{showAdvanced ? '▼' : '▶'}</span>
-                <span>Ajustes de Servidor iDempiere</span>
-              </button>
-
-              {showAdvanced && (
-                <div style={{
-                  marginTop: '10px',
-                  background: 'rgba(15, 23, 42, 0.6)',
-                  border: '1px solid #334155',
-                  borderRadius: '10px',
-                  padding: '12px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '10px'
-                }}>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.72rem', color: '#94a3b8', marginBottom: '4px', fontWeight: '600' }}>
-                      URL Base del Servidor
-                    </label>
-                    <div style={{ display: 'flex', gap: '4px' }}>
-                      <input
-                        type="text"
-                        value={baseUrl}
-                        onChange={(e) => setBaseUrl(e.target.value)}
-                        placeholder="http://localhost:8080"
-                        style={{
-                          width: '100%',
-                          background: '#1e293b',
-                          border: '1px solid #475569',
-                          borderRadius: '6px',
-                          padding: '6px 8px',
-                          color: '#f8fafc',
-                          fontSize: '0.75rem',
-                          fontFamily: 'monospace'
-                        }}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => checkStatus(baseUrl)}
-                        style={{
-                          background: '#334155',
-                          border: 'none',
-                          borderRadius: '6px',
-                          color: '#ffffff',
-                          padding: '0 8px',
-                          fontSize: '0.75rem',
-                          cursor: 'pointer'
-                        }}
-                      >
-                        Ping
-                      </button>
-                    </div>
-                  </div>
-
-                  <label style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    fontSize: '0.75rem',
-                    color: '#cbd5e1',
-                    cursor: 'pointer'
-                  }}>
-                    <input
-                      type="checkbox"
-                      checked={allowFallback}
-                      onChange={(e) => setAllowFallback(e.target.checked)}
-                      style={{ accentColor: '#d97706', width: '15px', height: '15px' }}
-                    />
-                    <span>Permitir <strong>Modo Resiliente</strong> si el ERP está offline</span>
-                  </label>
-                </div>
-              )}
             </div>
 
             {/* Botón de Acción Principal */}
@@ -583,7 +434,7 @@ export default function LoginPage() {
                 border: 'none',
                 borderRadius: '12px',
                 padding: '13px 20px',
-                fontSize: '0.94rem',
+                fontSize: '0.95rem',
                 fontWeight: '800',
                 cursor: isSubmitting ? 'not-allowed' : 'pointer',
                 boxShadow: authMode === 'direct' 
@@ -595,20 +446,20 @@ export default function LoginPage() {
                 justifyContent: 'center',
                 gap: '8px',
                 opacity: isSubmitting ? 0.7 : 1,
-                marginTop: '6px'
+                marginTop: '4px'
               }}
             >
               {isSubmitting ? (
                 <>
                   <span style={{ display: 'inline-block', animation: 'spin 1s linear infinite' }}>⏳</span>
-                  <span>Verificando credenciales en iDempiere...</span>
+                  <span>Verificando credenciales...</span>
                 </>
               ) : (
                 <>
                   <span>🔐</span>
                   <span>
                     {authMode === 'direct' 
-                      ? 'Ingresar Directo al Panel ➔' 
+                      ? 'Ingresar al Panel ➔' 
                       : 'Continuar ➔ Seleccionar Perfil'}
                   </span>
                 </>
@@ -617,11 +468,11 @@ export default function LoginPage() {
           </form>
         )}
 
-        {/* CASO B: Formulario de Selección de Perfil (Paso 2) con la MISMA Interfaz Oscura Glassmorphic */}
+        {/* CASO B: Formulario de Selección de Perfil (Paso 2) */}
         {authMode === 'twoStep' && currentStep === 2 && (
-          <form onSubmit={handleTwoStepConfirm} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <form onSubmit={handleTwoStepConfirm} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
             
-            {/* Header de Paso 2 con Isotipo iDempiere */}
+            {/* Header de Paso 2 */}
             <div style={{
               background: 'rgba(15, 23, 42, 0.7)',
               border: '1px solid rgba(56, 189, 248, 0.25)',
@@ -633,16 +484,24 @@ export default function LoginPage() {
               marginBottom: '4px'
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <svg width="32" height="32" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <circle cx="50" cy="50" r="46" fill="#0f172a" stroke="#38bdf8" strokeWidth="3" />
-                  <circle cx="48" cy="30" r="10" fill="#38bdf8" />
-                  <path d="M50 43 C 36 43, 26 55, 30 70 C 33 79, 44 84, 53 84 C 68 84, 78 70, 68 54 C 62 45, 52 44, 48 49 C 45 53, 49 59, 54 59 C 60 59, 63 53, 59 51" fill="#38bdf8" />
-                </svg>
+                <div style={{
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '8px',
+                  background: 'rgba(56, 189, 248, 0.15)',
+                  border: '1px solid rgba(56, 189, 248, 0.3)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '1.1rem'
+                }}>
+                  👤
+                </div>
                 <div>
                   <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#f8fafc' }}>
-                    Selecionar Perfil
+                    Seleccionar Perfil
                   </div>
-                  <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>
+                  <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
                     Usuario: <strong style={{ color: '#38bdf8' }}>{userName}</strong>
                   </div>
                 </div>
@@ -658,14 +517,14 @@ export default function LoginPage() {
                   cursor: 'pointer'
                 }}
               >
-                Defaults
+                Por Defecto
               </a>
             </div>
 
             {/* 1. Empresa */}
             <div>
               <label style={{ display: 'block', fontSize: '0.76rem', color: '#cbd5e1', marginBottom: '4px', fontWeight: '600' }}>
-                Empresa (Client)
+                Empresa
               </label>
               <select
                 value={selectedClientId}
@@ -683,7 +542,8 @@ export default function LoginPage() {
                   padding: '8px 12px',
                   color: '#ffffff',
                   fontSize: '0.86rem',
-                  outline: 'none'
+                  outline: 'none',
+                  boxSizing: 'border-box'
                 }}
               >
                 {clients.map(c => (
@@ -692,10 +552,10 @@ export default function LoginPage() {
               </select>
             </div>
 
-            {/* 2. Perfil (Role) */}
+            {/* 2. Rol de Acceso */}
             <div>
               <label style={{ display: 'block', fontSize: '0.76rem', color: '#cbd5e1', marginBottom: '4px', fontWeight: '600' }}>
-                Perfil (Role)
+                Rol de Acceso
               </label>
               <select
                 value={selectedRoleId}
@@ -708,7 +568,8 @@ export default function LoginPage() {
                   padding: '8px 12px',
                   color: '#ffffff',
                   fontSize: '0.86rem',
-                  outline: 'none'
+                  outline: 'none',
+                  boxSizing: 'border-box'
                 }}
               >
                 {filteredRoles.map(r => (
@@ -717,11 +578,11 @@ export default function LoginPage() {
               </select>
             </div>
 
-            {/* 3. Organización (organizationId - REGLA ESTRICTA) y Almacén en 2 columnas */}
+            {/* 3. Organización y Almacén en 2 columnas */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '0.76rem', color: '#f59e0b', marginBottom: '4px', fontWeight: '700' }}>
-                  Org (organizationId)
+                  Organización
                 </label>
                 <select
                   value={selectedOrgId}
@@ -735,7 +596,8 @@ export default function LoginPage() {
                     color: '#fef3c7',
                     fontSize: '0.84rem',
                     fontWeight: '700',
-                    outline: 'none'
+                    outline: 'none',
+                    boxSizing: 'border-box'
                   }}
                 >
                   {filteredOrgs.map(o => (
@@ -746,7 +608,7 @@ export default function LoginPage() {
 
               <div>
                 <label style={{ display: 'block', fontSize: '0.76rem', color: '#cbd5e1', marginBottom: '4px', fontWeight: '600' }}>
-                  Armazém (Warehouse)
+                  Almacén
                 </label>
                 <select
                   value={selectedWarehouseId}
@@ -759,7 +621,8 @@ export default function LoginPage() {
                     padding: '8px 10px',
                     color: '#ffffff',
                     fontSize: '0.84rem',
-                    outline: 'none'
+                    outline: 'none',
+                    boxSizing: 'border-box'
                   }}
                 >
                   {filteredWarehouses.map(w => (
@@ -773,7 +636,7 @@ export default function LoginPage() {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '0.76rem', color: '#cbd5e1', marginBottom: '4px', fontWeight: '600' }}>
-                  Idioma (Language)
+                  Idioma
                 </label>
                 <select
                   value={selectedLanguage}
@@ -786,7 +649,8 @@ export default function LoginPage() {
                     padding: '8px 10px',
                     color: '#ffffff',
                     fontSize: '0.84rem',
-                    outline: 'none'
+                    outline: 'none',
+                    boxSizing: 'border-box'
                   }}
                 >
                   {languages.map(l => (
@@ -797,7 +661,7 @@ export default function LoginPage() {
 
               <div>
                 <label style={{ display: 'block', fontSize: '0.76rem', color: '#cbd5e1', marginBottom: '4px', fontWeight: '600' }}>
-                  Data (Fecha)
+                  Fecha
                 </label>
                 <input
                   type="date"
@@ -811,7 +675,8 @@ export default function LoginPage() {
                     padding: '7px 10px',
                     color: '#ffffff',
                     fontSize: '0.82rem',
-                    outline: 'none'
+                    outline: 'none',
+                    boxSizing: 'border-box'
                   }}
                 />
               </div>
@@ -828,11 +693,11 @@ export default function LoginPage() {
                 color: '#7dd3fc',
                 lineHeight: 1.4
               }}>
-                ℹ️ <strong>Ayuda iDempiere:</strong> Al presionar <strong>OK</strong> se emitirá la petición <code>POST /api/v1/auth/tokens</code> con el rol y organización seleccionados para abrir el panel con sus permisos asignados.
+                ℹ️ <strong>Ayuda:</strong> Al presionar <strong>OK</strong> se iniciará la sesión con el perfil y organización seleccionados.
               </div>
             )}
 
-            {/* Botones de Acción (OK / Cancelar / Ajuda) */}
+            {/* Botones de Acción (OK / Cancelar / Ayuda) */}
             <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr auto', gap: '8px', marginTop: '10px' }}>
               
               {/* Botón OK */}
@@ -885,7 +750,7 @@ export default function LoginPage() {
                 <span>Volver</span>
               </button>
 
-              {/* Botón Ajuda */}
+              {/* Botón Ayuda */}
               <button
                 type="button"
                 onClick={() => setShowHelp(!showHelp)}
@@ -916,11 +781,7 @@ export default function LoginPage() {
           borderTop: '1px solid rgba(255, 255, 255, 0.05)',
           paddingTop: '12px'
         }}>
-          {authMode === 'direct' ? (
-            <span>Acceso Rápido &bull; <strong>GardenWorld Admin</strong> (Directo)</span>
-          ) : (
-            <span>Flujo Oficial iDempiere v1 &bull; {currentStep === 1 ? 'Paso 1: Credenciales' : 'Paso 2: Selecionar Perfil'}</span>
-          )}
+          <span>Panel Administrativo &bull; {authMode === 'direct' ? 'Acceso Directo' : (currentStep === 1 ? 'Paso 1: Credenciales' : 'Paso 2: Seleccionar Perfil')}</span>
         </div>
 
       </div>

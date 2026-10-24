@@ -1667,7 +1667,7 @@ function AdminAuthGateway() {
           Hamburger <span style={{ color: '#f59e0b' }}>Rapid</span>
         </div>
         <div style={{ fontSize: '0.82rem', color: '#94a3b8', marginTop: '6px' }}>
-          Verificando sesión iDempiere REST API v1...
+          Verificando sesión...
         </div>
       </div>
     );

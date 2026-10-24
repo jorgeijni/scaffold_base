@@ -61,7 +61,7 @@ export function AuthProvider({ children }) {
 
     const data = await response.json();
     if (!response.ok || !data.success) {
-      const err = new Error(data.error || 'Credenciales inválidas en iDempiere');
+      const err = new Error(data.error || 'Credenciales inválidas');
       err.detail = data.detail;
       err.status = data.status || response.status;
       throw err;
@@ -96,7 +96,7 @@ export function AuthProvider({ children }) {
 
       if (!response.ok || !data.success) {
         setIsLoading(false);
-        const err = new Error(data.error || 'Fallo en la autenticación con iDempiere');
+        const err = new Error(data.error || 'Fallo en la autenticación');
         err.detail = data.detail;
         err.status = data.status || response.status;
         err.endpoint = data.endpoint;
