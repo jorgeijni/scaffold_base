@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import LoginPage from './components/LoginPage';
+import AuthGuard from './components/AuthGuard';
 import ErpStatusModal from './components/ErpStatusModal';
+import OrdersInbox from './components/OrdersInbox';
 
 // Fallback data
 const INITIAL_FALLBACK_BURGERS = [
@@ -128,9 +129,9 @@ const INITIAL_FALLBACK_BURGERS = [
 ];
 
 function AdminDashboardContent() {
-  const { user, isMock, logout } = useAuth();
+  const { user, logout, getAuthHeaders } = useAuth();
   const [isErpModalOpen, setIsErpModalOpen] = useState(false);
-  const [activeSection, setActiveSection] = useState('burgers'); // 'burgers' | 'customers' | 'database' | 'orders'
+  const [activeSection, setActiveSection] = useState('orders'); // 'orders' | 'burgers' | 'customers' | 'database'
   const [burgers, setBurgers] = useState(INITIAL_FALLBACK_BURGERS);
   const [customerMetrics, setCustomerMetrics] = useState(null);
   const [dbStatus, setDbStatus] = useState(null);
@@ -184,7 +185,7 @@ function AdminDashboardContent() {
       }
 
       // 4. Orders
-      const orderRes = await fetch('/api/orders');
+      const orderRes = await fetch('/api/orders', { headers: getAuthHeaders() });
       const orderData = await orderRes.json();
       if (orderData.success && orderData.data) {
         setOrders(orderData.data);
@@ -379,13 +380,14 @@ function AdminDashboardContent() {
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
           
           {/* ERP Connection Status Pill (iDempiere REST v1) */}
-          <div
+          <button
+            type="button"
             onClick={() => setIsErpModalOpen(true)}
-            title="Haz clic para ver diagnóstico de sesión y token de iDempiere ERP"
+            title="Haz clic para ver contexto de sesión y token Bearer de iDempiere ERP"
             style={{
-              background: isMock ? '#fef3c7' : '#dcfce7',
-              border: `1px solid ${isMock ? '#fde68a' : '#86efac'}`,
-              color: isMock ? '#92400e' : '#166534',
+              background: '#dcfce7',
+              border: '1px solid #86efac',
+              color: '#166534',
               padding: '5px 12px',
               borderRadius: '20px',
               fontSize: '0.78rem',
@@ -393,14 +395,13 @@ function AdminDashboardContent() {
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
-              cursor: 'pointer',
-              transition: 'transform 0.15s'
+              cursor: 'pointer'
             }}
           >
-            <span>{isMock ? '🟡' : '🟢'}</span>
-            <span>{isMock ? 'ERP: Resiliente' : 'iDempiere v1'}</span>
+            <span>🟢</span>
+            <span>iDempiere v1 (Client #{user?.clientId} · Org #{user?.orgId})</span>
             <span style={{ fontSize: '0.7rem', opacity: 0.75 }}>⚙️</span>
-          </div>
+          </button>
 
           <div style={{
             background: dbStatus?.mode === 'mysql' ? '#dcfce7' : '#fef3c7',
@@ -480,7 +481,7 @@ function AdminDashboardContent() {
             gap: '8px',
             background: '#f1f5f9',
             border: '1px solid #cbd5e1',
-            padding: '4px 10px 4px 6px',
+            padding: '4px 6px 4px 8px',
             borderRadius: '24px',
             marginLeft: '4px'
           }}>
@@ -496,36 +497,40 @@ function AdminDashboardContent() {
               fontSize: '0.78rem',
               fontWeight: '800'
             }}>
-              {user?.userName ? user.userName.charAt(0).toUpperCase() : 'A'}
+              {user?.userName ? user.userName.charAt(0).toUpperCase() : 'U'}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <span style={{ fontSize: '0.76rem', fontWeight: '800', color: '#0f172a', lineHeight: 1.1, maxWidth: '120px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {user?.userName || 'Admin'}
+              <span style={{ fontSize: '0.76rem', fontWeight: '800', color: '#0f172a', lineHeight: 1.1, maxWidth: '140px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {user?.userName || 'Usuario iDempiere'}
               </span>
               <span style={{ fontSize: '0.66rem', color: '#64748b', fontWeight: '600' }}>
-                {user?.roleName || 'GardenWorld'} &bull; {user?.orgName || 'HQ'}
+                {user?.roleName || `Role #${user?.roleId}`} &bull; {user?.orgName || `Org #${user?.orgId}`}
               </span>
             </div>
             <button
               type="button"
               onClick={() => {
                 logout();
-                showToast('🔒 Sesión de iDempiere cerrada');
               }}
-              title="Cerrar sesión de iDempiere"
+              title="Cerrar sesión y purgar estado local"
               style={{
-                background: 'transparent',
-                border: 'none',
-                color: '#ef4444',
-                fontSize: '0.9rem',
+                background: '#fee2e2',
+                border: '1px solid #fecaca',
+                color: '#b91c1c',
+                fontSize: '0.74rem',
+                fontWeight: '800',
                 cursor: 'pointer',
-                padding: '2px 4px',
-                marginLeft: '2px',
+                padding: '5px 10px',
+                borderRadius: '16px',
+                marginLeft: '4px',
                 display: 'flex',
-                alignItems: 'center'
+                alignItems: 'center',
+                gap: '4px',
+                whiteSpace: 'nowrap'
               }}
             >
-              🚪
+              <span>🚪</span>
+              <span>Cerrar Sesión</span>
             </button>
           </div>
 
@@ -633,10 +638,10 @@ function AdminDashboardContent() {
           overflowX: 'auto'
         }}>
           {[
+            { id: 'orders', label: '📦 Gestión de Pedidos (PWA & E-commerce)', count: orders.length },
             { id: 'burgers', label: '🍔 Catálogo de Hamburguesas', count: burgers.length },
             { id: 'customers', label: '👥 Métricas de Consumidores / Clientes', count: customerMetrics?.topCustomers?.length || 7 },
-            { id: 'database', label: '🗄️ Estado de la Base de Datos', count: 'Live' },
-            { id: 'orders', label: '📦 Órdenes en Tiempo Real', count: orders.length }
+            { id: 'database', label: '🗄️ Estado de la Base de Datos', count: 'Live' }
           ].map((tab) => {
             const isActive = activeSection === tab.id;
             return (
@@ -1327,102 +1332,14 @@ function AdminDashboardContent() {
         )}
 
         {/* ================================================================ */}
-        {/* SECCIÓN 4: ÓRDENES EN TIEMPO REAL */}
+        {/* SECCIÓN 4: BANDEJA CENTRAL DE GESTIÓN DE PEDIDOS */}
         {/* ================================================================ */}
         {activeSection === 'orders' && (
-          <div className="fade-in">
-            <div style={{ marginBottom: '18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                <h2 style={{ fontSize: '1.4rem', fontWeight: '800', color: '#0f172a' }}>
-                  Comandas y Órdenes en Tiempo Real (PWA Live Feed)
-                </h2>
-                <p style={{ fontSize: '0.85rem', color: '#64748b' }}>
-                  Visualiza los pedidos simulados generados por los usuarios desde la aplicación móvil PWA.
-                </p>
-              </div>
-
-              <button
-                onClick={fetchData}
-                style={{
-                  background: '#f8fafc',
-                  border: '1px solid #cbd5e1',
-                  padding: '8px 16px',
-                  borderRadius: '8px',
-                  fontSize: '0.85rem',
-                  fontWeight: '700',
-                  cursor: 'pointer'
-                }}
-              >
-                🔄 Actualizar Comandas
-              </button>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              {orders.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '40px', background: '#ffffff', borderRadius: '14px', border: '1px solid #e2e8f0' }}>
-                  <div style={{ fontSize: '2.5rem', marginBottom: '8px' }}>📦</div>
-                  <h4 style={{ color: '#0f172a', fontWeight: '700' }}>No hay órdenes en cola</h4>
-                  <p style={{ color: '#64748b', fontSize: '0.85rem' }}>Simula un pedido en la PWA Móvil para verlo reflejado aquí.</p>
-                </div>
-              ) : (
-                orders.map((ord, idx) => (
-                  <div
-                    key={ord.id || idx}
-                    style={{
-                      background: '#ffffff',
-                      borderRadius: '14px',
-                      border: '1px solid #e2e8f0',
-                      padding: '16px 20px',
-                      boxShadow: '0 2px 6px rgba(0,0,0,0.02)',
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      flexWrap: 'wrap',
-                      gap: '12px'
-                    }}
-                  >
-                    <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <span style={{ fontWeight: '800', color: '#0f172a', fontSize: '1.05rem' }}>
-                          Orden #{ord.id}
-                        </span>
-                        <span style={{
-                          background: ord.status?.includes('Entregado') ? '#dcfce7' : '#fef3c7',
-                          color: ord.status?.includes('Entregado') ? '#166534' : '#92400e',
-                          padding: '3px 10px',
-                          borderRadius: '12px',
-                          fontSize: '0.72rem',
-                          fontWeight: '800'
-                        }}>
-                          {ord.status || 'Preparando'}
-                        </span>
-                        <span style={{ background: '#f1f5f9', color: '#475569', fontSize: '0.72rem', fontWeight: '700', padding: '3px 8px', borderRadius: '6px' }}>
-                          {ord.channel || 'PWA Mobile'}
-                        </span>
-                      </div>
-
-                      <div style={{ fontSize: '0.82rem', color: '#475569', marginTop: '6px' }}>
-                        Cliente: <strong>{ord.customerName}</strong> &bull; Entrega en: {ord.address || 'Av. Las Condes'}
-                      </div>
-
-                      <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '4px' }}>
-                        Detalle: {ord.items?.map(it => `${it.quantity}x ${it.name}`).join(', ')}
-                      </div>
-                    </div>
-
-                    <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontSize: '1.3rem', fontWeight: '800', color: '#b45309' }}>
-                        ${parseFloat(ord.total || 0).toFixed(2)}
-                      </div>
-                      <span style={{ fontSize: '0.75rem', color: '#10b981', fontWeight: '700' }}>
-                        ● Simulación Sincronizada
-                      </span>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
+          <OrdersInbox
+            orders={orders}
+            onRefresh={fetchData}
+            onShowToast={showToast}
+          />
         )}
 
       </div>
@@ -1625,57 +1542,13 @@ function AdminDashboardContent() {
   );
 }
 
-// Orquestador Principal con Provider y Gateway de Autenticación
+// Orquestador Principal con Provider y AuthGuard
 export default function App() {
   return (
     <AuthProvider>
-      <AdminAuthGateway />
+      <AuthGuard>
+        <AdminDashboardContent />
+      </AuthGuard>
     </AuthProvider>
   );
-}
-
-function AdminAuthGateway() {
-  const { isAuthenticated, isLoading } = useAuth();
-
-  if (isLoading) {
-    return (
-      <div style={{
-        minHeight: '100vh',
-        background: 'radial-gradient(ellipse at top, #1e293b 0%, #0f172a 100%)',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        color: '#f8fafc',
-        fontFamily: "'Plus Jakarta Sans', system-ui, sans-serif"
-      }}>
-        <div style={{
-          width: '60px',
-          height: '60px',
-          borderRadius: '16px',
-          background: 'linear-gradient(135deg, #d97706, #b45309)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: '2rem',
-          marginBottom: '16px',
-          boxShadow: '0 10px 25px rgba(217, 119, 6, 0.4)'
-        }}>
-          🍔
-        </div>
-        <div style={{ fontSize: '1.25rem', fontWeight: '800', color: '#ffffff' }}>
-          Hamburger <span style={{ color: '#f59e0b' }}>Rapid</span>
-        </div>
-        <div style={{ fontSize: '0.82rem', color: '#94a3b8', marginTop: '6px' }}>
-          Verificando sesión...
-        </div>
-      </div>
-    );
-  }
-
-  if (!isAuthenticated) {
-    return <LoginPage />;
-  }
-
-  return <AdminDashboardContent />;
 }

@@ -1,201 +1,124 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-
-const STORAGE_KEY = 'idempiere_auth_session';
+import authService from '../services/AuthService';
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
-  const [token, setToken] = useState(null);
-  const [refreshToken, setRefreshToken] = useState(null);
-  const [isMock, setIsMock] = useState(false);
-  const [loginMode, setLoginMode] = useState(null); // 'live' | 'resilient_simulated'
-  const [erpEndpoint, setErpEndpoint] = useState('/api/v1/auth/tokens');
-  const [erpBaseUrl, setErpBaseUrl] = useState('http://localhost:8080');
-  const [latencyMs, setLatencyMs] = useState(null);
-  const [warningMessage, setWarningMessage] = useState(null);
+  const [session, setSession] = useState(() => authService.getSession());
+  const [connectionConfig, setConnectionConfig] = useState(() => authService.getConnectionConfig());
   const [isLoading, setIsLoading] = useState(true);
 
-  // Restaurar sesión al cargar
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const session = JSON.parse(stored);
-        if (session && session.token) {
-          setUser(session.user);
-          setToken(session.token);
-          setRefreshToken(session.refreshToken || null);
-          setIsMock(session.isMock || false);
-          setLoginMode(session.loginMode || (session.isMock ? 'resilient_simulated' : 'live'));
-          setErpEndpoint(session.erpEndpoint || '/api/v1/auth/tokens');
-          setErpBaseUrl(session.erpBaseUrl || 'http://localhost:8080');
-          setLatencyMs(session.latencyMs || null);
-          setWarningMessage(session.warningMessage || null);
-        }
-      }
-    } catch (e) {
-      console.warn('Error al leer sesión almacenada de iDempiere:', e);
-      localStorage.removeItem(STORAGE_KEY);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+    setSession(authService.getSession());
+    setConnectionConfig(authService.getConnectionConfig());
+    setIsLoading(false);
 
-  // Paso 1: Valida credenciales y obtiene opciones de perfil
-  const authenticateCredentials = async ({ userName, password, baseUrl, allowFallback = true }) => {
-    const targetBase = baseUrl || erpBaseUrl || 'http://localhost:8080';
-    const response = await fetch('/api/idempiere/authenticate', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
-      body: JSON.stringify({
-        userName,
-        password,
-        baseUrl: targetBase,
-        allowFallback
-      })
+    const unsubscribe = authService.subscribe((nextSession, nextConfig) => {
+      setSession(nextSession);
+      setConnectionConfig(nextConfig);
     });
 
-    const data = await response.json();
-    if (!response.ok || !data.success) {
-      const err = new Error(data.error || 'Credenciales inválidas');
-      err.detail = data.detail;
-      err.status = data.status || response.status;
-      throw err;
-    }
+    return unsubscribe;
+  }, []);
 
-    return data;
+  const updateConnectionConfig = (partial) => {
+    return authService.setConnectionConfig(partial);
   };
 
-  // Función de inicio de sesión (Paso 2 con contexto y roles)
-  const login = async ({ userName, password, parameters, baseUrl, allowFallback = true }) => {
-    setIsLoading(true);
-    setWarningMessage(null);
-
-    try {
-      const targetBase = baseUrl || erpBaseUrl || 'http://localhost:8080';
-      const response = await fetch('/api/idempiere/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify({
-          userName,
-          password,
-          parameters,
-          baseUrl: targetBase,
-          allowFallback
-        })
-      });
-
-      const data = await response.json();
-
-      if (!response.ok || !data.success) {
-        setIsLoading(false);
-        const err = new Error(data.error || 'Fallo en la autenticación');
-        err.detail = data.detail;
-        err.status = data.status || response.status;
-        err.endpoint = data.endpoint;
-        throw err;
-      }
-
-      // Éxito: Guardar sesión
-      setUser(data.user);
-      setToken(data.token);
-      setRefreshToken(data.refreshToken || null);
-      setIsMock(!!data.isMock);
-      setLoginMode(data.mode);
-      setErpEndpoint(data.endpoint);
-      setErpBaseUrl(targetBase);
-      setLatencyMs(data.latencyMs);
-      setWarningMessage(data.warning || null);
-
-      const sessionToSave = {
-        user: data.user,
-        token: data.token,
-        refreshToken: data.refreshToken,
-        isMock: !!data.isMock,
-        loginMode: data.mode,
-        erpEndpoint: data.endpoint,
-        erpBaseUrl: targetBase,
-        latencyMs: data.latencyMs,
-        warningMessage: data.warning || null,
-        savedAt: Date.now()
-      };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(sessionToSave));
-
-      setIsLoading(false);
-      return data;
-    } catch (error) {
-      setIsLoading(false);
-      throw error;
-    }
+  const loginDirect = async (params) => {
+    return authService.loginDirect(params);
   };
 
-  // Función de cierre de sesión
-  const logout = async () => {
-    try {
-      await fetch('/api/idempiere/logout', { method: 'POST' });
-    } catch (e) {
-      console.warn('Error menor al avisar logout al servidor:', e);
-    }
-    setUser(null);
-    setToken(null);
-    setRefreshToken(null);
-    setIsMock(false);
-    setLoginMode(null);
-    setWarningMessage(null);
-    localStorage.removeItem(STORAGE_KEY);
+  const loginStepOne = async (params) => {
+    return authService.loginStepOne(params);
   };
 
-  // Probar ping directo al backend / iDempiere
-  const pingErp = async (customUrl) => {
-    const url = customUrl || erpBaseUrl;
-    try {
-      const res = await fetch(`/api/idempiere/status?baseUrl=${encodeURIComponent(url)}`);
-      return await res.json();
-    } catch (err) {
-      return { online: false, error: err.message };
-    }
+  const loginStepTwo = async (params) => {
+    return authService.loginStepTwo(params);
   };
 
-  // Helper para cabeceras con Bearer Token
+  const fetchRoles = async (tempToken, clientId, overrideConfig = null) => {
+    return authService.fetchRoles(tempToken, clientId, overrideConfig);
+  };
+
+  const fetchOrganizations = async (tempToken, clientId, roleId, overrideConfig = null) => {
+    return authService.fetchOrganizations(tempToken, clientId, roleId, overrideConfig);
+  };
+
+  const fetchWarehouses = async (tempToken, clientId, roleId, organizationId, overrideConfig = null) => {
+    return authService.fetchWarehouses(tempToken, clientId, roleId, organizationId, overrideConfig);
+  };
+
+  const logout = () => {
+    authService.logout();
+    fetch('/api/idempiere/logout', { method: 'POST' }).catch(() => {});
+  };
+
+  const pingErp = async (overrideConfig = null) => {
+    return authService.testConnection(overrideConfig);
+  };
+
   const getAuthHeaders = () => {
-    if (!token) return {};
-    return {
-      'Authorization': `Bearer ${token}`
-    };
+    return authService.getAuthHeaders();
   };
+
+  const user = session
+    ? {
+        userId: session.userId,
+        userName: session.userName,
+        clientId: session.clientId,
+        roleId: session.roleId,
+        orgId: session.orgId,
+        organizationId: session.organizationId,
+        warehouseId: session.warehouseId,
+        language: session.language,
+        clientName: session.clientName,
+        roleName: session.roleName,
+        orgName: session.orgName,
+        warehouseName: session.warehouseName
+      }
+    : null;
+
+  const isAuthenticated = Boolean(session?.token && !authService.isTokenExpired(session.token));
 
   const value = {
+    session,
     user,
-    token,
-    refreshToken,
-    isAuthenticated: !!user && !!token,
-    isMock,
-    loginMode,
-    erpEndpoint,
-    erpBaseUrl,
-    latencyMs,
-    warningMessage,
+    token: session?.token || null,
+    refreshToken: session?.refreshToken || null,
+    isAuthenticated,
     isLoading,
-    authenticateCredentials,
-    login,
+    userId: session?.userId ?? null,
+    clientId: session?.clientId ?? null,
+    roleId: session?.roleId ?? null,
+    orgId: session?.orgId ?? null,
+    organizationId: session?.organizationId ?? null,
+    warehouseId: session?.warehouseId ?? null,
+    language: session?.language ?? null,
+    authMode: session?.authMode || null,
+    erpEndpoint: session?.endpoint || '/api/v1/auth/tokens',
+    erpBaseUrl: session?.baseUrl || connectionConfig.baseUrl,
+    baseUrl: connectionConfig.baseUrl,
+    corsProxyEnabled: connectionConfig.corsProxyEnabled,
+    corsProxyMode: connectionConfig.corsProxyMode,
+    corsProxyCustomUrl: connectionConfig.corsProxyCustomUrl,
+    connectionConfig,
+    latencyMs: session?.latencyMs ?? null,
+    viaProxy: session?.viaProxy ?? false,
+    authService,
+    updateConnectionConfig,
+    loginDirect,
+    loginStepOne,
+    loginStepTwo,
+    fetchRoles,
+    fetchOrganizations,
+    fetchWarehouses,
     logout,
     pingErp,
-    getAuthHeaders,
-    setErpBaseUrl
+    getAuthHeaders
   };
 
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {

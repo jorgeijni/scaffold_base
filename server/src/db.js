@@ -222,8 +222,42 @@ const INITIAL_CUSTOMERS = [
   }
 ];
 
-// Órdenes simuladas iniciales
+// Órdenes iniciales (PWA Preventa / Vendedores & E-commerce)
 const INITIAL_ORDERS = [
+  {
+    id: 'HR-1094',
+    customerName: 'Corporativo Andino S.A.',
+    items: [
+      { name: 'Rey de las Burgers', quantity: 4, price: 15.90 },
+      { name: 'Burger Trufa Deluxe', quantity: 2, price: 17.50 }
+    ],
+    total: 98.60,
+    status: 'Pendiente de Aprobación ⏳',
+    channel: 'PWA Preventa',
+    originType: 'pwa',
+    salesRep: 'Vendedor Norte (J. Pérez)',
+    erpSyncStatus: 'Pendiente',
+    erpDocumentNo: null,
+    address: 'Av. Apoquindo #4500, Piso 12',
+    createdAt: new Date(Date.now() - 1000 * 60 * 4).toISOString()
+  },
+  {
+    id: 'HR-1093',
+    customerName: 'Valentina Herrera',
+    items: [
+      { name: 'Burger Monster Rapid XXL', quantity: 1, price: 18.90 },
+      { name: 'Burger Royal Crispy Chicken', quantity: 1, price: 12.90 }
+    ],
+    total: 31.80,
+    status: 'Pendiente de Aprobación ⏳',
+    channel: 'Web E-commerce',
+    originType: 'ecommerce',
+    salesRep: null,
+    erpSyncStatus: 'Pendiente',
+    erpDocumentNo: null,
+    address: 'Providencia #2124, Dpto 302',
+    createdAt: new Date(Date.now() - 1000 * 60 * 8).toISOString()
+  },
   {
     id: 'HR-1092',
     customerName: 'Carlos Mendoza',
@@ -233,7 +267,11 @@ const INITIAL_ORDERS = [
     ],
     total: 36.30,
     status: 'Preparando en cocina 👨‍🍳',
-    channel: 'PWA Mobile',
+    channel: 'PWA Preventa',
+    originType: 'pwa',
+    salesRep: 'Vendedor Centro (M. López)',
+    erpSyncStatus: 'Sincronizado',
+    erpDocumentNo: 'SO-80012',
     address: 'Av. Las Condes #1240, Dpto 804',
     createdAt: new Date(Date.now() - 1000 * 60 * 12).toISOString()
   },
@@ -247,6 +285,10 @@ const INITIAL_ORDERS = [
     total: 19.00,
     status: 'En camino con repartidor 🛵',
     channel: 'PWA Mobile',
+    originType: 'pwa',
+    salesRep: 'App Móvil Preventa',
+    erpSyncStatus: 'Pendiente',
+    erpDocumentNo: null,
     address: 'Calle Nueva Providencia #190',
     createdAt: new Date(Date.now() - 1000 * 60 * 28).toISOString()
   },
@@ -260,6 +302,10 @@ const INITIAL_ORDERS = [
     total: 26.00,
     status: 'Entregado con éxito ✅',
     channel: 'Web E-commerce',
+    originType: 'ecommerce',
+    salesRep: null,
+    erpSyncStatus: 'Sincronizado',
+    erpDocumentNo: 'SO-80009',
     address: 'Vitacura #3200, Of 401',
     createdAt: new Date(Date.now() - 1000 * 60 * 75).toISOString()
   }
@@ -482,19 +528,46 @@ function getConsumerMetrics() {
   };
 }
 
-// Simulación de Órdenes
-function getOrders() {
-  return inMemoryOrders;
+// Gestión de Órdenes (PWA Preventa / E-commerce)
+function getOrders(origin = 'all') {
+  if (!origin || origin === 'all') {
+    return inMemoryOrders;
+  }
+  return inMemoryOrders.filter((o) => {
+    const ch = (o.channel || '').toLowerCase();
+    const orig = o.originType || (ch.includes('ecom') || ch.includes('web') ? 'ecommerce' : 'pwa');
+    return orig === origin;
+  });
+}
+
+function getOrderById(id) {
+  return inMemoryOrders.find((o) => String(o.id) === String(id)) || null;
+}
+
+function updateOrder(id, updates = {}) {
+  const order = getOrderById(id);
+  if (!order) return null;
+  Object.assign(order, updates, { updatedAt: new Date().toISOString() });
+  return order;
 }
 
 function createOrder(orderData) {
+  const channel = orderData.channel || 'PWA Mobile';
+  const normalizedOrigin =
+    orderData.originType ||
+    (channel.toLowerCase().includes('ecom') || channel.toLowerCase().includes('web') ? 'ecommerce' : 'pwa');
+
   const newOrder = {
     id: `HR-${Math.floor(1000 + Math.random() * 9000)}`,
     customerName: orderData.customerName || 'Cliente PWA',
     items: orderData.items || [],
     total: parseFloat(orderData.total) || 0,
-    status: 'Preparando en cocina 👨‍🍳',
-    channel: 'PWA Mobile',
+    status: orderData.status || 'Pendiente de Aprobación ⏳',
+    channel,
+    originType: normalizedOrigin,
+    salesRep: orderData.salesRep || (normalizedOrigin === 'pwa' ? 'App PWA Preventa' : null),
+    erpSyncStatus: 'Pendiente',
+    erpDocumentNo: null,
     address: orderData.address || 'Entrega estándar',
     coupon: orderData.coupon || null,
     createdAt: new Date().toISOString()
@@ -545,6 +618,8 @@ module.exports = {
   resetProducts,
   getConsumerMetrics,
   getOrders,
+  getOrderById,
+  updateOrder,
   createOrder,
   getDbStatus
 };

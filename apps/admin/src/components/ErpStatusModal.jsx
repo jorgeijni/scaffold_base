@@ -2,7 +2,17 @@ import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 
 export default function ErpStatusModal({ isOpen, onClose }) {
-  const { user, token, isMock, loginMode, erpEndpoint, erpBaseUrl, latencyMs, warningMessage, pingErp } = useAuth();
+  const {
+    session,
+    user,
+    token,
+    authMode,
+    erpBaseUrl,
+    corsProxyEnabled,
+    corsProxyMode,
+    latencyMs,
+    pingErp
+  } = useAuth();
   const [copied, setCopied] = useState(false);
   const [pinging, setPinging] = useState(false);
   const [testResult, setTestResult] = useState(null);
@@ -19,7 +29,7 @@ export default function ErpStatusModal({ isOpen, onClose }) {
   const handleRunPing = async () => {
     setPinging(true);
     try {
-      const res = await pingErp(erpBaseUrl);
+      const res = await pingErp();
       setTestResult(res);
     } catch (err) {
       setTestResult({ online: false, error: err.message });
@@ -29,181 +39,172 @@ export default function ErpStatusModal({ isOpen, onClose }) {
   };
 
   const maskedToken = token
-    ? `${token.substring(0, 16)}...${token.substring(token.length - 12)}`
+    ? `${token.substring(0, 18)}...${token.substring(token.length - 12)}`
     : 'No hay token activo';
 
   return (
-    <div style={{
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      backgroundColor: 'rgba(15, 23, 42, 0.75)',
-      backdropFilter: 'blur(6px)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      zIndex: 10000,
-      padding: '20px'
-    }}>
-      <div style={{
-        background: '#ffffff',
-        borderRadius: '16px',
-        width: '100%',
-        maxWidth: '580px',
-        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.35)',
-        overflow: 'hidden',
-        border: '1px solid #e2e8f0',
-        color: '#0f172a'
-      }}>
-        {/* Header del Modal */}
-        <div style={{
-          padding: '18px 24px',
-          background: '#0f172a',
-          color: '#ffffff',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          borderBottom: '1px solid #1e293b'
-        }}>
+    <div
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(15, 23, 42, 0.75)',
+        backdropFilter: 'blur(6px)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 10000,
+        padding: '20px'
+      }}
+    >
+      <div
+        style={{
+          background: '#ffffff',
+          borderRadius: '16px',
+          width: '100%',
+          maxWidth: '620px',
+          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.35)',
+          overflow: 'hidden',
+          border: '1px solid #e2e8f0',
+          color: '#0f172a'
+        }}
+      >
+        <div
+          style={{
+            padding: '18px 24px',
+            background: '#0f172a',
+            color: '#ffffff',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            borderBottom: '1px solid #1e293b'
+          }}
+        >
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <span style={{ fontSize: '1.4rem' }}>⚙️</span>
             <div>
               <div style={{ fontSize: '1.05rem', fontWeight: '800' }}>
-                Diagnóstico de Integración iDempiere ERP v1
+                Contexto de Sesión &amp; Integración iDempiere v1
               </div>
               <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
-                Sesión Activa, Parámetros de Contexto y Token Bearer
+                Token Bearer, parámetros de contexto almacenados y conectividad CORS
               </div>
             </div>
           </div>
           <button
             onClick={onClose}
-            style={{
-              background: 'transparent',
-              border: 'none',
-              color: '#94a3b8',
-              fontSize: '1.4rem',
-              cursor: 'pointer',
-              lineHeight: 1
-            }}
+            style={{ background: 'transparent', border: 'none', color: '#94a3b8', fontSize: '1.4rem', cursor: 'pointer', lineHeight: 1 }}
           >
             ×
           </button>
         </div>
 
-        {/* Contenido del Modal */}
-        <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          
-          {/* Badge Estado */}
-          <div style={{
-            background: isMock ? '#fef3c7' : '#dcfce7',
-            border: `1px solid ${isMock ? '#fde68a' : '#86efac'}`,
-            padding: '12px 16px',
-            borderRadius: '10px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '1.2rem' }}>{isMock ? '🟡' : '🟢'}</span>
-              <div>
-                <div style={{ fontSize: '0.88rem', fontWeight: '800', color: isMock ? '#92400e' : '#166534' }}>
-                  {isMock ? 'Modo Resiliente / Simulación de Contingencia' : 'Conectado en Vivo con iDempiere REST API v1'}
-                </div>
-                <div style={{ fontSize: '0.75rem', color: isMock ? '#b45309' : '#15803d' }}>
-                  {isMock 
-                    ? 'El ERP remoto no estaba accesible; se emitió token de contingencia.'
-                    : `Conexión verificada exitosamente (${latencyMs || 0}ms).`}
-                </div>
+        <div style={{ padding: '22px 24px', display: 'flex', flexDirection: 'column', gap: '16px', maxHeight: '78vh', overflowY: 'auto' }}>
+          <div
+            style={{
+              background: '#dcfce7',
+              border: '1px solid #86efac',
+              padding: '12px 16px',
+              borderRadius: '10px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '10px',
+              flexWrap: 'wrap'
+            }}
+          >
+            <div>
+              <div style={{ fontSize: '0.88rem', fontWeight: '800', color: '#166534' }}>
+                🟢 Sesión Validada por iDempiere REST API v1
+              </div>
+              <div style={{ fontSize: '0.75rem', color: '#15803d' }}>
+                Modalidad: {authMode === 'two_step' ? 'Asistida (2 Pasos)' : 'Directa (1 Paso)'}
+                {latencyMs !== null && ` • Latencia login: ${latencyMs}ms`}
+                {corsProxyEnabled ? ` • Proxy CORS: ${corsProxyMode}` : ' • Conexión Directa'}
               </div>
             </div>
           </div>
 
-          {warningMessage && (
-            <div style={{
-              background: '#fffbeb',
-              borderLeft: '4px solid #f59e0b',
-              padding: '10px 14px',
-              borderRadius: '6px',
-              fontSize: '0.78rem',
-              color: '#92400e'
-            }}>
-              ⚠️ {warningMessage}
-            </div>
-          )}
-
-          {/* Cuadrícula de Parámetros de Contexto */}
           <div>
-            <div style={{ fontSize: '0.78rem', fontWeight: '800', color: '#475569', textTransform: 'uppercase', marginBottom: '8px' }}>
-              📋 Parámetros de Contexto Inyectados (Reglas iDempiere v1)
+            <div style={{ fontSize: '0.76rem', fontWeight: '800', color: '#475569', textTransform: 'uppercase', marginBottom: '8px' }}>
+              📋 Contexto Persistente Almacenado
             </div>
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(2, 1fr)',
-              gap: '10px',
-              background: '#f8fafc',
-              padding: '14px',
-              borderRadius: '10px',
-              border: '1px solid #e2e8f0',
-              fontSize: '0.82rem'
-            }}>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(2, 1fr)',
+                gap: '10px',
+                background: '#f8fafc',
+                padding: '14px',
+                borderRadius: '10px',
+                border: '1px solid #e2e8f0',
+                fontSize: '0.82rem'
+              }}
+            >
               <div>
                 <span style={{ color: '#64748b' }}>Usuario (userName):</span>
-                <div style={{ fontWeight: '700', color: '#0f172a' }}>{user?.userName || 'N/A'}</div>
+                <div style={{ fontWeight: '700' }}>{user?.userName || 'N/A'}</div>
               </div>
               <div>
-                <span style={{ color: '#64748b' }}>Endpoint Base:</span>
-                <div style={{ fontWeight: '700', color: '#0284c7', fontFamily: 'monospace' }}>
-                  POST /api/v1/auth/tokens
+                <span style={{ color: '#64748b' }}>User ID (userId):</span>
+                <div style={{ fontWeight: '700' }}>{user?.userId ?? 'N/A'}</div>
+              </div>
+              <div>
+                <span style={{ color: '#64748b' }}>Tenant (clientId):</span>
+                <div style={{ fontWeight: '700' }}>
+                  {user?.clientId} ({user?.clientName})
                 </div>
               </div>
               <div>
-                <span style={{ color: '#64748b' }}>Cliente (clientId):</span>
-                <div style={{ fontWeight: '700' }}>{user?.clientId} ({user?.clientName || 'GardenWorld'})</div>
-              </div>
-              <div>
                 <span style={{ color: '#64748b' }}>Rol (roleId):</span>
-                <div style={{ fontWeight: '700' }}>{user?.roleId} ({user?.roleName || 'Admin'})</div>
+                <div style={{ fontWeight: '700' }}>
+                  {user?.roleId} ({user?.roleName})
+                </div>
               </div>
               <div>
-                <span style={{ color: '#64748b' }}>Organización (organizationId):</span>
+                <span style={{ color: '#64748b' }}>Organización (orgId / organizationId):</span>
                 <div style={{ fontWeight: '700', color: '#d97706' }}>
-                  {user?.organizationId} ({user?.orgName || 'HQ'}) &bull; <small style={{ color: '#059669' }}>OK</small>
+                  {user?.orgId} ({user?.orgName})
                 </div>
               </div>
               <div>
                 <span style={{ color: '#64748b' }}>Almacén (warehouseId):</span>
-                <div style={{ fontWeight: '700' }}>{user?.warehouseId || 103}</div>
+                <div style={{ fontWeight: '700' }}>
+                  {user?.warehouseId ?? 'N/A'} {user?.warehouseName ? `(${user.warehouseName})` : ''}
+                </div>
               </div>
               <div>
                 <span style={{ color: '#64748b' }}>Idioma (language):</span>
                 <div style={{ fontWeight: '700' }}>{user?.language || 'en_US'}</div>
               </div>
               <div>
-                <span style={{ color: '#64748b' }}>Servidor Destino:</span>
-                <div style={{ fontWeight: '700', fontFamily: 'monospace', fontSize: '0.75rem' }}>{erpBaseUrl}</div>
+                <span style={{ color: '#64748b' }}>Base URL ERP:</span>
+                <div style={{ fontWeight: '700', fontFamily: 'monospace', fontSize: '0.75rem', wordBreak: 'break-all' }}>
+                  {erpBaseUrl}
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Token Bearer */}
           <div>
-            <div style={{ fontSize: '0.78rem', fontWeight: '800', color: '#475569', textTransform: 'uppercase', marginBottom: '8px' }}>
+            <div style={{ fontSize: '0.76rem', fontWeight: '800', color: '#475569', textTransform: 'uppercase', marginBottom: '8px' }}>
               🔑 Token Bearer de Sesión
             </div>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              background: '#0f172a',
-              color: '#38bdf8',
-              padding: '10px 14px',
-              borderRadius: '8px',
-              fontFamily: 'monospace',
-              fontSize: '0.78rem'
-            }}>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                background: '#0f172a',
+                color: '#38bdf8',
+                padding: '10px 14px',
+                borderRadius: '8px',
+                fontFamily: 'monospace',
+                fontSize: '0.78rem'
+              }}
+            >
               <span style={{ flex: 1, wordBreak: 'break-all' }}>{maskedToken}</span>
               <button
                 type="button"
@@ -225,17 +226,31 @@ export default function ErpStatusModal({ isOpen, onClose }) {
             </div>
           </div>
 
-          {/* Prueba de Conectividad Interactiva */}
-          <div style={{
-            borderTop: '1px solid #e2e8f0',
-            paddingTop: '14px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '8px'
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          {session?.claims && Object.keys(session.claims).length > 0 && (
+            <div>
+              <div style={{ fontSize: '0.76rem', fontWeight: '800', color: '#475569', textTransform: 'uppercase', marginBottom: '6px' }}>
+                🧾 Claims Decodificados (JWT)
+              </div>
+              <pre
+                style={{
+                  background: '#f1f5f9',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '8px',
+                  padding: '10px',
+                  fontSize: '0.72rem',
+                  overflowX: 'auto',
+                  color: '#334155'
+                }}
+              >
+                {JSON.stringify(session.claims, null, 2)}
+              </pre>
+            </div>
+          )}
+
+          <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '14px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
               <span style={{ fontSize: '0.8rem', fontWeight: '700', color: '#334155' }}>
-                Test de Conectividad con iDempiere ({erpBaseUrl})
+                Test de Conectividad ({erpBaseUrl}/api/v1/auth/tokens)
               </span>
               <button
                 type="button"
@@ -256,29 +271,32 @@ export default function ErpStatusModal({ isOpen, onClose }) {
             </div>
 
             {testResult && (
-              <div style={{
-                background: testResult.online ? '#ecfdf5' : '#fef2f2',
-                border: `1px solid ${testResult.online ? '#a7f3d0' : '#fecaca'}`,
-                padding: '8px 12px',
-                borderRadius: '8px',
-                fontSize: '0.76rem',
-                color: testResult.online ? '#065f46' : '#991b1b'
-              }}>
-                <strong>{testResult.online ? '✓ En línea' : '✗ Sin conexión'}</strong>: {testResult.message || testResult.error} {testResult.latencyMs && `(${testResult.latencyMs}ms)`}
+              <div
+                style={{
+                  background: testResult.online ? '#ecfdf5' : '#fef2f2',
+                  border: `1px solid ${testResult.online ? '#a7f3d0' : '#fecaca'}`,
+                  padding: '8px 12px',
+                  borderRadius: '8px',
+                  fontSize: '0.76rem',
+                  color: testResult.online ? '#065f46' : '#991b1b'
+                }}
+              >
+                <strong>{testResult.online ? '✓ En línea' : '✕ Sin conexión'}</strong>: {testResult.message || testResult.error}{' '}
+                {testResult.latencyMs !== undefined && `(${testResult.latencyMs}ms)`}
               </div>
             )}
           </div>
-
         </div>
 
-        {/* Footer del Modal */}
-        <div style={{
-          padding: '14px 24px',
-          background: '#f8fafc',
-          borderTop: '1px solid #e2e8f0',
-          display: 'flex',
-          justifyContent: 'flex-end'
-        }}>
+        <div
+          style={{
+            padding: '14px 24px',
+            background: '#f8fafc',
+            borderTop: '1px solid #e2e8f0',
+            display: 'flex',
+            justifyContent: 'flex-end'
+          }}
+        >
           <button
             onClick={onClose}
             style={{

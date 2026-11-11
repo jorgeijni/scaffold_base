@@ -81,10 +81,11 @@ router.get('/metrics/customers', (req, res) => {
   }
 });
 
-// Orders (for PWA order simulation and Admin tracking)
+// Orders (PWA Preventa, E-commerce & Admin tracking)
 router.get('/orders', (req, res) => {
   try {
-    const orders = db.getOrders();
+    const origin = req.query.origin || 'all';
+    const orders = db.getOrders(origin);
     res.json({ success: true, count: orders.length, data: orders });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -94,7 +95,124 @@ router.get('/orders', (req, res) => {
 router.post('/orders', (req, res) => {
   try {
     const newOrder = db.createOrder(req.body);
-    res.status(201).json({ success: true, message: 'Orden simulada creada con éxito', data: newOrder });
+    res.status(201).json({ success: true, message: 'Orden creada con éxito', data: newOrder });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.patch('/orders/:id/status', (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status, approvedBy } = req.body;
+    if (!status) {
+      return res.status(400).json({ success: false, error: 'El campo "status" es obligatorio.' });
+    }
+    const updated = db.updateOrder(id, {
+      status,
+      approvedBy: approvedBy || null
+    });
+    if (!updated) {
+      return res.status(404).json({ success: false, error: `Orden ${id} no encontrada.` });
+    }
+    res.json({ success: true, message: 'Estado de orden actualizado', data: updated });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.post('/orders/:id/sync-erp', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const authHeader = req.headers.authorization || '';
+    const token = req.body.token || (authHeader.startsWith('Bearer ') ? authHeader.substring(7) : null);
+
+    if (!token) {
+      return res.status(401).json({
+        success: false,
+        error: 'Se requiere un token Bearer activo de iDempiere para coordinar la sincronización.'
+      });
+    }
+
+    const order = db.getOrderById(id);
+    if (!order) {
+      return res.status(404).json({ success: false, error: `Orden ${id} no encontrada.` });
+    }
+
+    const ctx = req.body.context || {};
+    const baseUrl = (req.body.baseUrl || '').trim().replace(/\/+$/, '');
+    const orgId = ctx.organizationId ?? ctx.orgId ?? 11;
+
+    const erpPayload = {
+      AD_Client_ID: ctx.clientId ?? 11,
+      AD_Org_ID: orgId,
+      M_Warehouse_ID: ctx.warehouseId ?? 103,
+      DocumentNo: order.id,
+      Description: `[${order.channel}] Cliente: ${order.customerName} | Items: ${(order.items || []).map(i => `${i.quantity}x ${i.name}`).join(', ')}`,
+      GrandTotal: order.total,
+      IsSOTrx: true,
+      ...(ctx.userId ? { SalesRep_ID: ctx.userId } : {})
+    };
+
+    let syncedLive = false;
+    let erpDocumentNo = `SO-${order.id}`;
+    let remoteStatus = null;
+    let remoteDetail = null;
+
+    if (baseUrl) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 8000);
+        const erpRes = await fetch(`${baseUrl}/api/v1/models/C_Order`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(erpPayload),
+          signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+        remoteStatus = erpRes.status;
+        const text = await erpRes.text();
+        let parsed = {};
+        try { parsed = text ? JSON.parse(text) : {}; } catch { parsed = { message: text }; }
+
+        if (erpRes.ok) {
+          syncedLive = true;
+          erpDocumentNo = parsed.DocumentNo || (parsed.id ? `SO-${parsed.id}` : erpDocumentNo);
+          remoteDetail = parsed;
+        } else {
+          remoteDetail = parsed.detail || parsed.message || parsed;
+        }
+      } catch (err) {
+        remoteDetail = err.message;
+      }
+    }
+
+    const updated = db.updateOrder(id, {
+      erpSyncStatus: syncedLive ? 'Sincronizado' : 'Coordinado (Cola ERP)',
+      erpDocumentNo: syncedLive ? erpDocumentNo : null,
+      erpContext: {
+        userId: ctx.userId ?? null,
+        clientId: ctx.clientId ?? null,
+        roleId: ctx.roleId ?? null,
+        orgId,
+        warehouseId: ctx.warehouseId ?? null
+      }
+    });
+
+    res.json({
+      success: true,
+      syncedLive,
+      remoteStatus,
+      message: syncedLive
+        ? `Sincronizado en vivo con iDempiere C_Order (${erpDocumentNo}).`
+        : `Sincronización coordinada con contexto ERP (Client #${erpPayload.AD_Client_ID}, Org #${erpPayload.AD_Org_ID}). Respuesta remota C_Order: HTTP ${remoteStatus || 'N/A'} (${typeof remoteDetail === 'string' ? remoteDetail : JSON.stringify(remoteDetail)}).`,
+      erpPayload,
+      data: updated
+    });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
