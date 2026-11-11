@@ -2,9 +2,9 @@ import React, { useState } from 'react';
 import { DEFAULT_LANGUAGES } from '../services/AuthService';
 
 /**
- * Paso 2 del Login Asistido (Multitenant Dinámico):
- * Permite seleccionar Empresa, Rol, Organización, Almacén e Idioma
- * recargando dinámicamente las opciones dependientes desde iDempiere REST API v1.
+ * Paso 2 del acceso asistido:
+ * Permite seleccionar empresa, rol operativo, sucursal, punto de despacho e idioma
+ * recargando dinámicamente las opciones asignadas al usuario.
  */
 export default function TwoStepContextForm({
   stepOneData,
@@ -144,29 +144,32 @@ export default function TwoStepContextForm({
 
   const selectStyle = {
     width: '100%',
-    background: 'rgba(15, 23, 42, 0.85)',
-    border: '1px solid #475569',
-    borderRadius: '8px',
-    padding: '9px 12px',
-    color: '#ffffff',
-    fontSize: '0.85rem',
-    outline: 'none'
+    background: '#f8fafc',
+    border: '1px solid #cbd5e1',
+    borderRadius: '10px',
+    padding: '10px 12px',
+    color: '#0f172a',
+    fontSize: '0.86rem',
+    fontWeight: '600',
+    outline: 'none',
+    boxSizing: 'border-box',
+    transition: 'border-color 0.15s ease, box-shadow 0.15s ease'
   };
 
   const labelStyle = {
     display: 'block',
-    fontSize: '0.75rem',
-    color: '#cbd5e1',
-    marginBottom: '4px',
+    fontSize: '0.76rem',
+    color: '#334155',
+    marginBottom: '6px',
     fontWeight: '700'
   };
 
   return (
-    <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '13px' }}>
+    <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
       <div
         style={{
-          background: 'rgba(15, 23, 42, 0.7)',
-          border: '1px solid rgba(56, 189, 248, 0.3)',
+          background: '#fffbeb',
+          border: '1px solid #fde68a',
           borderRadius: '12px',
           padding: '12px 14px',
           display: 'flex',
@@ -176,17 +179,16 @@ export default function TwoStepContextForm({
         }}
       >
         <div>
-          <div style={{ fontSize: '0.92rem', fontWeight: '800', color: '#f8fafc' }}>
-            Paso 2: Seleccionar Contexto ERP
+          <div style={{ fontSize: '0.88rem', fontWeight: '800', color: '#0f172a' }}>
+            Selecciona tu entorno de trabajo
           </div>
-          <div style={{ fontSize: '0.74rem', color: '#94a3b8' }}>
-            Usuario verificado: <strong style={{ color: '#38bdf8' }}>{stepOneData.userName}</strong>
-            {stepOneData.userId ? ` (ID: ${stepOneData.userId})` : ''}
+          <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '2px' }}>
+            Cuenta verificada: <strong style={{ color: '#b45309' }}>{stepOneData.userName}</strong>
           </div>
         </div>
         {loadingCascade && (
-          <span style={{ fontSize: '0.72rem', color: '#38bdf8', fontWeight: '700' }}>
-            ⏳ Cargando...
+          <span style={{ fontSize: '0.74rem', color: '#b45309', fontWeight: '700' }}>
+            Actualizando...
           </span>
         )}
       </div>
@@ -194,48 +196,53 @@ export default function TwoStepContextForm({
       {cascadeError && (
         <div
           style={{
-            background: 'rgba(245, 158, 11, 0.15)',
-            border: '1px solid rgba(245, 158, 11, 0.4)',
-            color: '#fcd34d',
-            padding: '8px 12px',
-            borderRadius: '8px',
-            fontSize: '0.76rem'
+            background: '#fffbeb',
+            border: '1px solid #fcd34d',
+            color: '#92400e',
+            padding: '9px 12px',
+            borderRadius: '10px',
+            fontSize: '0.78rem',
+            fontWeight: '600'
           }}
         >
-          ⚠️ No se pudieron recargar opciones dinámicas: {cascadeError}
+          No se pudieron actualizar todas las listas: {cascadeError}
         </div>
       )}
 
       <div>
-        <label style={labelStyle}>Empresa / Tenant (clientId)</label>
+        <label htmlFor="step2-client" style={labelStyle}>Empresa / Marca</label>
         <select
+          id="step2-client"
+          className="login-input"
           value={clientId}
           onChange={(e) => handleClientChange(e.target.value)}
           required
           style={selectStyle}
         >
-          {clients.length === 0 && <option value="">Sin empresas disponibles</option>}
+          {clients.length === 0 && <option value="">Sin empresas asignadas</option>}
           {clients.map((c) => (
             <option key={c.id} value={c.id}>
-              {c.name} (ID: {c.id})
+              {c.name}
             </option>
           ))}
         </select>
       </div>
 
       <div>
-        <label style={labelStyle}>Rol de Acceso (roleId)</label>
+        <label htmlFor="step2-role" style={labelStyle}>Perfil de Acceso / Rol</label>
         <select
+          id="step2-role"
+          className="login-input"
           value={roleId}
           onChange={(e) => handleRoleChange(e.target.value)}
           required
           disabled={loadingCascade || roles.length === 0}
           style={selectStyle}
         >
-          {roles.length === 0 && <option value="">Sin roles para esta empresa</option>}
+          {roles.length === 0 && <option value="">Sin perfiles disponibles</option>}
           {roles.map((r) => (
             <option key={r.id} value={r.id}>
-              {r.name} (ID: {r.id})
+              {r.name}
             </option>
           ))}
         </select>
@@ -243,35 +250,39 @@ export default function TwoStepContextForm({
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
         <div>
-          <label style={{ ...labelStyle, color: '#f59e0b' }}>Organización (organizationId)</label>
+          <label htmlFor="step2-org" style={labelStyle}>Sucursal / Sede</label>
           <select
+            id="step2-org"
+            className="login-input"
             value={organizationId}
             onChange={(e) => handleOrgChange(e.target.value)}
             required
             disabled={loadingCascade || organizations.length === 0}
-            style={{ ...selectStyle, borderColor: '#d97706', color: '#fef3c7' }}
+            style={selectStyle}
           >
-            {organizations.length === 0 && <option value="">Sin organizaciones</option>}
+            {organizations.length === 0 && <option value="">Sin sucursales</option>}
             {organizations.map((o) => (
               <option key={o.id} value={o.id}>
-                {o.name} (ID: {o.id})
+                {o.name}
               </option>
             ))}
           </select>
         </div>
 
         <div>
-          <label style={labelStyle}>Almacén (warehouseId)</label>
+          <label htmlFor="step2-warehouse" style={labelStyle}>Punto de Despacho</label>
           <select
+            id="step2-warehouse"
+            className="login-input"
             value={warehouseId}
             onChange={(e) => setWarehouseId(e.target.value)}
             disabled={loadingCascade}
             style={selectStyle}
           >
-            {warehouses.length === 0 && <option value="">(Sin Almacén)</option>}
+            {warehouses.length === 0 && <option value="">Predeterminado</option>}
             {warehouses.map((w) => (
               <option key={w.id} value={w.id}>
-                {w.name} (ID: {w.id})
+                {w.name}
               </option>
             ))}
           </select>
@@ -279,49 +290,51 @@ export default function TwoStepContextForm({
       </div>
 
       <div>
-        <label style={labelStyle}>Idioma (language)</label>
+        <label htmlFor="step2-language" style={labelStyle}>Idioma de la sesión</label>
         <select
+          id="step2-language"
+          className="login-input"
           value={language}
           onChange={(e) => setLanguage(e.target.value)}
           style={selectStyle}
         >
           {languages.map((l) => (
             <option key={l.code} value={l.code}>
-              {l.name} ({l.code})
+              {l.name}
             </option>
           ))}
         </select>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '10px', marginTop: '6px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '10px', marginTop: '4px' }}>
         <button
           type="submit"
           disabled={isSubmitting || loadingCascade || clientId === '' || roleId === '' || organizationId === ''}
           style={{
-            background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
+            background: 'linear-gradient(135deg, #d97706 0%, #b45309 100%)',
             color: '#ffffff',
             border: 'none',
-            borderRadius: '10px',
-            padding: '11px 16px',
+            borderRadius: '11px',
+            padding: '12px 16px',
             fontSize: '0.88rem',
             fontWeight: '800',
             cursor: isSubmitting ? 'wait' : 'pointer',
-            opacity: isSubmitting || loadingCascade ? 0.7 : 1,
-            boxShadow: '0 6px 18px rgba(2, 132, 199, 0.35)'
+            opacity: isSubmitting || loadingCascade ? 0.72 : 1,
+            boxShadow: '0 8px 20px -4px rgba(217, 119, 6, 0.45)'
           }}
         >
-          {isSubmitting ? '⏳ Obteniendo token final...' : '✓ Confirmar y Entrar'}
+          {isSubmitting ? 'Ingresando...' : 'Confirmar y Entrar →'}
         </button>
 
         <button
           type="button"
           onClick={onBack}
           style={{
-            background: 'rgba(30, 41, 59, 0.85)',
-            color: '#cbd5e1',
-            border: '1px solid #475569',
-            borderRadius: '10px',
-            padding: '11px 12px',
+            background: '#ffffff',
+            color: '#334155',
+            border: '1px solid #cbd5e1',
+            borderRadius: '11px',
+            padding: '12px',
             fontSize: '0.84rem',
             fontWeight: '700',
             cursor: 'pointer'
@@ -333,4 +346,3 @@ export default function TwoStepContextForm({
     </form>
   );
 }
-

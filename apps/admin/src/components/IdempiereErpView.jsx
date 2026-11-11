@@ -743,3 +743,4 @@ export default function IdempiereErpView({ onOpenInspector }) {
     </div>
   );
 }
+

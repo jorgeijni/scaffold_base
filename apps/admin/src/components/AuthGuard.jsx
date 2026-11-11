@@ -32,36 +32,36 @@ export default function AuthGuard({ children, fallback = null }) {
       <div
         style={{
           minHeight: '100vh',
-          background: 'radial-gradient(ellipse at top, #1e293b 0%, #0f172a 100%)',
+          background: 'linear-gradient(145deg, #f8fafc 0%, #f1f5f9 100%)',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          color: '#f8fafc',
+          color: '#0f172a',
           fontFamily: "'Plus Jakarta Sans', system-ui, sans-serif"
         }}
       >
         <div
           style={{
-            width: '60px',
-            height: '60px',
+            width: '56px',
+            height: '56px',
             borderRadius: '16px',
-            background: 'linear-gradient(135deg, #d97706, #b45309)',
+            background: 'linear-gradient(135deg, #f97316, #dc2626)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            fontSize: '2rem',
+            fontSize: '1.85rem',
             marginBottom: '16px',
-            boxShadow: '0 10px 25px rgba(217, 119, 6, 0.4)'
+            boxShadow: '0 12px 28px rgba(234, 88, 12, 0.28)'
           }}
         >
           🍔
         </div>
-        <div style={{ fontSize: '1.25rem', fontWeight: '800', color: '#ffffff' }}>
-          Hamburger <span style={{ color: '#f59e0b' }}>Rapid</span>
+        <div style={{ fontSize: '1.2rem', fontWeight: '800', color: '#0f172a' }}>
+          Hamburger <span style={{ color: '#d97706' }}>Rapid</span>
         </div>
-        <div style={{ fontSize: '0.82rem', color: '#94a3b8', marginTop: '6px' }}>
-          Verificando sesión activa en iDempiere...
+        <div style={{ fontSize: '0.82rem', color: '#64748b', marginTop: '6px', fontWeight: '600' }}>
+          Verificando sesión activa...
         </div>
       </div>
     );

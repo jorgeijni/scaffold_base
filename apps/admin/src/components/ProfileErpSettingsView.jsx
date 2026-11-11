@@ -314,3 +314,4 @@ export default function ProfileErpSettingsView({ onOpenInspector }) {
     </div>
   );
 }
+

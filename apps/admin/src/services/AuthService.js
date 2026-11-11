@@ -238,11 +238,11 @@ export class AuthService {
 
   buildHttpError(status, data, targetUrl) {
     const detail = data?.detail || data?.message || data?.error || data?.title || null;
-    let message = `Error HTTP ${status} en iDempiere`;
-    if (status === 400) message = 'HTTP 400 Bad Request: Estructura o parámetros inválidos en la solicitud a iDempiere.';
-    if (status === 401) message = 'HTTP 401 Unauthorized: Credenciales inválidas o sesión expirada en iDempiere.';
-    if (status === 403) message = 'HTTP 403 Forbidden: El usuario no tiene acceso al cliente, rol u organización seleccionada.';
-    if (status === 404) message = 'HTTP 404 Not Found: Endpoint /api/v1/auth/tokens no encontrado en el Base URL indicado.';
+    let message = `No se pudo completar la autenticación (código ${status}).`;
+    if (status === 400) message = 'Los datos de acceso o sede proporcionados no son válidos.';
+    if (status === 401) message = 'Usuario o contraseña incorrectos, o sesión expirada.';
+    if (status === 403) message = 'Tu cuenta no cuenta con permisos para la sede u organización seleccionada.';
+    if (status === 404) message = 'El servicio de autenticación no respondió en la dirección configurada.';
 
     const err = new Error(message);
     err.status = status;
@@ -254,8 +254,8 @@ export class AuthService {
 
   buildNetworkError(err, viaProxy, targetUrl) {
     const hint = viaProxy
-      ? `No se pudo contactar a "${targetUrl}" a través del Proxy CORS.`
-      : `No se pudo conectar directamente con "${targetUrl}". Si el servidor no tiene CORS habilitado, activa el selector "Proxy CORS".`;
+      ? 'No se pudo establecer comunicación con el servicio de autenticación a través del puente de red.'
+      : 'No se pudo conectar con el servidor de autenticación. Verifica tu red o habilita el puente de conexión en opciones avanzadas.';
     const wrapped = new Error(hint);
     wrapped.status = 0;
     wrapped.detail = err?.message || 'Network / CORS error';
@@ -378,7 +378,7 @@ export class AuthService {
 
     const token = data.token || data.access_token;
     if (!token || typeof token !== 'string') {
-      throw new Error('iDempiere respondió 200 OK pero no incluyó un token Bearer válido.');
+      throw new Error('El servidor respondió sin un token de sesión válido.');
     }
 
     return this.persistSessionFromAuth({
@@ -420,7 +420,7 @@ export class AuthService {
 
     const tempToken = data.token || data.access_token;
     if (!tempToken) {
-      throw new Error('iDempiere no devolvió el token temporal de Paso 1.');
+      throw new Error('No se recibió el token de verificación inicial.');
     }
 
     const claims = this.decodeJwt(tempToken);
@@ -545,14 +545,14 @@ export class AuthService {
 
     const finalToken = data.token || data.access_token;
     if (!finalToken || typeof finalToken !== 'string') {
-      throw new Error('iDempiere respondió 200 OK en Paso 2 pero no devolvió un token definitivo.');
+      throw new Error('El servidor no devolvió el token de sesión definitivo.');
     }
 
     return this.persistSessionFromAuth({
       token: finalToken,
       refreshToken: data.refresh_token || data.refreshToken || null,
       responseData: data,
-      userName: userName || data.userName || 'Usuario iDempiere',
+      userName: userName || data.userName || 'Administrador',
       parameters: putBody,
       labels,
       authMode: 'two_step',
@@ -730,8 +730,8 @@ export class AuthService {
         targetUrl,
         viaProxy,
         message: reachable
-          ? `Endpoint iDempiere REST API v1 alcanzable (HTTP ${res.status}).`
-          : `El servidor respondió HTTP ${res.status} al verificar /api/v1/auth/tokens.`
+          ? `Servicio de autenticación disponible (HTTP ${res.status}).`
+          : `El servidor respondió HTTP ${res.status} al verificar disponibilidad.`
       };
     } catch (err) {
       return {
@@ -742,8 +742,8 @@ export class AuthService {
         viaProxy,
         error: err.message,
         message: viaProxy
-          ? `Sin conexión con ${targetUrl} vía Proxy CORS (${err.message}).`
-          : `Error de red o CORS al consultar ${targetUrl}. Activa el Proxy CORS para pruebas desde navegador.`
+          ? `Sin respuesta del servidor vía puente de conexión (${err.message}).`
+          : `Error de red o CORS al consultar el servidor. Activa el puente de conexión en opciones avanzadas.`
       };
     }
   }
