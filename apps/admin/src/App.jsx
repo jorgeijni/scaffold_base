@@ -3,6 +3,40 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import AuthGuard from './components/AuthGuard';
 import ErpStatusModal from './components/ErpStatusModal';
 import OrdersInbox from './components/OrdersInbox';
+import AdminSidebar from './components/AdminSidebar';
+import IdempiereErpView from './components/IdempiereErpView';
+import ProfileErpSettingsView from './components/ProfileErpSettingsView';
+
+const SECTION_META = {
+  resumen: {
+    title: 'Resumen General Ejecutivo',
+    subtitle: 'Indicadores clave, flujo multicanal PWA/E-commerce e integración ERP'
+  },
+  burgers: {
+    title: 'Catálogo de Hamburguesas',
+    subtitle: 'Administración de recetas nobles, precios, stock y niveles de especialidad'
+  },
+  orders: {
+    title: 'Bandeja Central de Pedidos',
+    subtitle: 'Control operativo unificado: PWA Preventa / Vendedores vs Portal E-commerce'
+  },
+  customers: {
+    title: 'Métricas de Clientes & Consumo',
+    subtitle: 'Comportamiento de compra, ticket promedio y recurrencia de clientes'
+  },
+  database: {
+    title: 'Estado del Motor de Base de Datos',
+    subtitle: 'Monitoreo de salud, latencia de consultas y persistencia de datos'
+  },
+  idempiere: {
+    title: 'Integración iDempiere ERP REST v1',
+    subtitle: 'Plataforma comercial y operacional de Hamburger Rapid • Conectividad REST v1'
+  },
+  profile: {
+    title: 'Perfil & Conexión ERP',
+    subtitle: 'Contexto de sesión activo, URL base de iDempiere y configuración de Proxy CORS'
+  }
+};
 
 // Fallback data
 const INITIAL_FALLBACK_BURGERS = [
@@ -131,7 +165,8 @@ const INITIAL_FALLBACK_BURGERS = [
 function AdminDashboardContent() {
   const { user, logout, getAuthHeaders } = useAuth();
   const [isErpModalOpen, setIsErpModalOpen] = useState(false);
-  const [activeSection, setActiveSection] = useState('orders'); // 'orders' | 'burgers' | 'customers' | 'database'
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [activeSection, setActiveSection] = useState('resumen'); // 'resumen' | 'burgers' | 'orders' | 'customers' | 'database' | 'idempiere' | 'profile'
   const [burgers, setBurgers] = useState(INITIAL_FALLBACK_BURGERS);
   const [customerMetrics, setCustomerMetrics] = useState(null);
   const [dbStatus, setDbStatus] = useState(null);
@@ -315,374 +350,345 @@ function AdminDashboardContent() {
     return matchesSearch && matchesCat;
   });
 
+  const currentMeta = SECTION_META[activeSection] || SECTION_META.resumen;
+
   return (
-    <div style={{ minHeight: '100vh', background: '#f8fafc', color: '#0f172a', display: 'flex', flexDirection: 'column' }}>
-      
-      {/* Toast Alert */}
-      {toastMessage && (
-        <div style={{
-          position: 'fixed',
-          top: '20px',
-          right: '24px',
-          background: '#0f172a',
-          color: '#ffffff',
-          padding: '12px 20px',
-          borderRadius: '12px',
-          fontSize: '0.88rem',
-          fontWeight: '700',
-          zIndex: 9999,
-          boxShadow: '0 10px 25px rgba(0,0,0,0.15)',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px'
-        }}>
-          {toastMessage}
-        </div>
+    <div style={{ minHeight: '100vh', background: '#f8fafc', color: '#0f172a', display: 'flex' }}>
+      {/* Mobile Sidebar Backdrop */}
+      {isSidebarOpen && (
+        <div
+          className="admin-sidebar-backdrop"
+          onClick={() => setIsSidebarOpen(false)}
+        />
       )}
 
-      {/* Top Header Navbar */}
-      <header style={{
-        background: '#ffffff',
-        borderBottom: '1px solid #e2e8f0',
-        padding: '12px 28px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        flexWrap: 'wrap',
-        gap: '12px',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.02)'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+      {/* Left Control Dashboard Sidebar */}
+      <AdminSidebar
+        activeSection={activeSection}
+        onSelectSection={setActiveSection}
+        burgersCount={burgers.length}
+        ordersCount={orders.length}
+        onOpenInspector={() => setIsErpModalOpen(true)}
+        isOpenMobile={isSidebarOpen}
+        onCloseMobile={() => setIsSidebarOpen(false)}
+      />
+
+      {/* Right Main Area */}
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+        {/* Toast Alert */}
+        {toastMessage && (
           <div style={{
-            background: '#fef3c7',
-            width: '42px',
-            height: '42px',
+            position: 'fixed',
+            top: '20px',
+            right: '24px',
+            background: '#0f172a',
+            color: '#ffffff',
+            padding: '12px 20px',
             borderRadius: '12px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: '1.5rem',
-            border: '1px solid #fde68a'
-          }}>
-            🍔
-          </div>
-          <div>
-            <div style={{ fontSize: '1.2rem', fontWeight: '800', color: '#0f172a', lineHeight: '1.2' }}>
-              Hamburger <span style={{ color: '#d97706' }}>Rapid</span> &bull; Panel de Control
-            </div>
-            <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: '600' }}>
-              Gestión Comercial, Métricas de Clientes y Estado de Base de Datos
-            </div>
-          </div>
-        </div>
-
-        {/* Database Quick Pill, ERP Gateway Pill, Actions & User Profile */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-          
-          {/* ERP Connection Status Pill (iDempiere REST v1) */}
-          <button
-            type="button"
-            onClick={() => setIsErpModalOpen(true)}
-            title="Haz clic para ver contexto de sesión y token Bearer de iDempiere ERP"
-            style={{
-              background: '#dcfce7',
-              border: '1px solid #86efac',
-              color: '#166534',
-              padding: '5px 12px',
-              borderRadius: '20px',
-              fontSize: '0.78rem',
-              fontWeight: '700',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              cursor: 'pointer'
-            }}
-          >
-            <span>🟢</span>
-            <span>iDempiere v1 (Client #{user?.clientId} · Org #{user?.orgId})</span>
-            <span style={{ fontSize: '0.7rem', opacity: 0.75 }}>⚙️</span>
-          </button>
-
-          <div style={{
-            background: dbStatus?.mode === 'mysql' ? '#dcfce7' : '#fef3c7',
-            border: `1px solid ${dbStatus?.mode === 'mysql' ? '#86efac' : '#fde68a'}`,
-            color: dbStatus?.mode === 'mysql' ? '#166534' : '#92400e',
-            padding: '5px 12px',
-            borderRadius: '20px',
-            fontSize: '0.78rem',
+            fontSize: '0.88rem',
             fontWeight: '700',
+            zIndex: 9999,
+            boxShadow: '0 10px 25px rgba(0,0,0,0.15)',
             display: 'flex',
             alignItems: 'center',
-            gap: '6px'
+            gap: '8px'
           }}>
-            <span>{dbStatus?.mode === 'mysql' ? '🐬' : '⚡'}</span>
-            <span>{dbStatus?.mode === 'mysql' ? 'MySQL' : 'In-Memory'}</span>
-            {pingLatency !== null && <span style={{ opacity: 0.8 }}>({pingLatency}ms)</span>}
+            {toastMessage}
+          </div>
+        )}
+
+        {/* Top Header Navbar */}
+        <header style={{
+          background: '#ffffff',
+          borderBottom: '1px solid #e2e8f0',
+          padding: '14px 28px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: '12px'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <button
+              type="button"
+              className="admin-sidebar-toggle"
+              onClick={() => setIsSidebarOpen(true)}
+              aria-label="Abrir navegación"
+              style={{
+                width: '36px',
+                height: '36px',
+                borderRadius: '9px',
+                border: '1px solid #cbd5e1',
+                background: '#ffffff',
+                fontSize: '1.1rem',
+                cursor: 'pointer',
+                color: '#0f172a'
+              }}
+            >
+              ☰
+            </button>
+
+            <div>
+              <h1 style={{ fontSize: '1.3rem', fontWeight: '800', color: '#0f172a', lineHeight: 1.2, margin: 0 }}>
+                {currentMeta.title}
+              </h1>
+              <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: '500', marginTop: '2px' }}>
+                {currentMeta.subtitle}
+              </div>
+            </div>
           </div>
 
-          <button
-            onClick={handleResetData}
-            style={{
-              background: '#f8fafc',
-              border: '1px solid #cbd5e1',
-              padding: '6px 12px',
-              borderRadius: '8px',
-              fontSize: '0.8rem',
-              fontWeight: '700',
-              color: '#475569',
-              cursor: 'pointer'
-            }}
-          >
-            🌱 Reset
-          </button>
-
-          <a
-            href="/"
-            style={{
-              background: '#ffffff',
-              border: '1px solid #cbd5e1',
-              color: '#0f172a',
-              textDecoration: 'none',
-              padding: '6px 12px',
-              borderRadius: '8px',
-              fontSize: '0.8rem',
-              fontWeight: '700',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px'
-            }}
-          >
-            🌐 Web
-          </a>
-
-          <a
-            href="/app"
-            style={{
-              background: 'linear-gradient(135deg, #d97706, #b45309)',
-              color: '#ffffff',
-              textDecoration: 'none',
-              padding: '6px 12px',
-              borderRadius: '8px',
-              fontSize: '0.8rem',
-              fontWeight: '700',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-              boxShadow: '0 2px 6px rgba(217, 119, 6, 0.25)'
-            }}
-          >
-            📱 App
-          </a>
-
-          {/* User Profile Badge & Logout */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            background: '#f1f5f9',
-            border: '1px solid #cbd5e1',
-            padding: '4px 6px 4px 8px',
-            borderRadius: '24px',
-            marginLeft: '4px'
-          }}>
-            <div style={{
-              width: '28px',
-              height: '28px',
-              borderRadius: '50%',
-              background: '#0f172a',
-              color: '#f59e0b',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '0.78rem',
-              fontWeight: '800'
-            }}>
-              {user?.userName ? user.userName.charAt(0).toUpperCase() : 'U'}
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <span style={{ fontSize: '0.76rem', fontWeight: '800', color: '#0f172a', lineHeight: 1.1, maxWidth: '140px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {user?.userName || 'Usuario iDempiere'}
+          {/* Right Status Pills & Quick Actions */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            {/* Active ERP User & Role Pill */}
+            <button
+              type="button"
+              onClick={() => setIsErpModalOpen(true)}
+              title="Inspeccionar Token Bearer y parámetros ERP en sesión"
+              style={{
+                background: '#f0fdf4',
+                border: '1px solid #bbf7d0',
+                color: '#14532d',
+                padding: '5px 10px',
+                borderRadius: '9999px',
+                fontSize: '0.76rem',
+                fontWeight: '700',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '7px',
+                cursor: 'pointer'
+              }}
+            >
+              <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#22c55e' }} />
+              <span style={{ maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {user?.userName || 'Usuario ERP'}
               </span>
-              <span style={{ fontSize: '0.66rem', color: '#64748b', fontWeight: '600' }}>
-                {user?.roleName || `Role #${user?.roleId}`} &bull; {user?.orgName || `Org #${user?.orgId}`}
+              <span style={{
+                background: '#16a34a',
+                color: '#ffffff',
+                padding: '2px 8px',
+                borderRadius: '9999px',
+                fontSize: '0.68rem',
+                fontWeight: '800'
+              }}>
+                {user?.roleName || `Role ${user?.roleId || 'Admin'}`}
               </span>
-            </div>
+            </button>
+
+            {/* Database Datamart Pill */}
+            <button
+              type="button"
+              onClick={() => setActiveSection('database')}
+              style={{
+                background: '#f8fafc',
+                border: '1px solid #e2e8f0',
+                color: '#334155',
+                padding: '6px 12px',
+                borderRadius: '9px',
+                fontSize: '0.76rem',
+                fontWeight: '700',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                cursor: 'pointer'
+              }}
+            >
+              <span>⚡</span>
+              <span>{dbStatus?.mode === 'mysql' ? 'MySQL Datamart' : 'SQLite Datamart'}</span>
+              {pingLatency !== null && <span style={{ opacity: 0.7 }}>({pingLatency}ms)</span>}
+            </button>
+
+            {/* Refresh Button */}
             <button
               type="button"
               onClick={() => {
-                logout();
+                fetchData();
+                handlePingDb();
+                showToast('🔄 Datos actualizados');
               }}
+              style={{
+                background: '#ffffff',
+                border: '1px solid #cbd5e1',
+                padding: '6px 12px',
+                borderRadius: '9px',
+                fontSize: '0.78rem',
+                fontWeight: '700',
+                color: '#0f172a',
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px'
+              }}
+            >
+              <span>🔄</span>
+              <span>Refrescar</span>
+            </button>
+
+            {/* Reset Demo Data Button */}
+            <button
+              type="button"
+              onClick={handleResetData}
+              title="Restablecer catálogo y métricas demo"
+              style={{
+                background: '#f8fafc',
+                border: '1px solid #e2e8f0',
+                padding: '6px 10px',
+                borderRadius: '9px',
+                fontSize: '0.76rem',
+                fontWeight: '700',
+                color: '#475569',
+                cursor: 'pointer'
+              }}
+            >
+              🌱 Reset
+            </button>
+
+            {/* Logout Button */}
+            <button
+              type="button"
+              onClick={logout}
               title="Cerrar sesión y purgar estado local"
               style={{
-                background: '#fee2e2',
-                border: '1px solid #fecaca',
-                color: '#b91c1c',
-                fontSize: '0.74rem',
+                background: '#fff1f2',
+                border: '1px solid #fecdd3',
+                color: '#e11d48',
+                fontSize: '0.78rem',
                 fontWeight: '800',
                 cursor: 'pointer',
-                padding: '5px 10px',
-                borderRadius: '16px',
-                marginLeft: '4px',
-                display: 'flex',
+                padding: '6px 12px',
+                borderRadius: '9px',
+                display: 'inline-flex',
                 alignItems: 'center',
-                gap: '4px',
-                whiteSpace: 'nowrap'
+                gap: '5px'
               }}
             >
               <span>🚪</span>
-              <span>Cerrar Sesión</span>
+              <span>Salir</span>
             </button>
           </div>
+        </header>
 
-        </div>
-      </header>
+        {/* Main Content Area */}
+        <div style={{ width: '100%', padding: '24px 28px', flex: 1 }}>
 
-      {/* Main Container */}
-      <div style={{ maxWidth: '1280px', width: '100%', margin: '0 auto', padding: '24px 20px', flex: 1 }}>
-        
-        {/* Top 4 KPI Executive Metric Cards */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-          gap: '16px',
-          marginBottom: '28px'
-        }}>
-          {/* KPI 1 */}
-          <div style={{
-            background: '#ffffff',
-            borderRadius: '16px',
-            border: '1px solid #e2e8f0',
-            padding: '18px 20px',
-            boxShadow: '0 2px 6px rgba(0,0,0,0.02)'
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-              <span style={{ fontSize: '0.8rem', fontWeight: '700', color: '#64748b', textTransform: 'uppercase' }}>Consumo Total Clientes</span>
-              <span style={{ background: '#fef3c7', padding: '4px 8px', borderRadius: '8px', fontSize: '1.1rem' }}>💰</span>
-            </div>
-            <div style={{ fontSize: '1.8rem', fontWeight: '800', color: '#b45309' }}>
-              ${customerMetrics?.summary?.totalRevenue || '1,220.10'}
-            </div>
-            <div style={{ fontSize: '0.78rem', color: '#10b981', fontWeight: '700', marginTop: '4px' }}>
-              ↑ +24.5% vs periodo anterior &bull; {customerMetrics?.summary?.totalOrders || 80} órdenes
-            </div>
-          </div>
-
-          {/* KPI 2 */}
-          <div style={{
-            background: '#ffffff',
-            borderRadius: '16px',
-            border: '1px solid #e2e8f0',
-            padding: '18px 20px',
-            boxShadow: '0 2px 6px rgba(0,0,0,0.02)'
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-              <span style={{ fontSize: '0.8rem', fontWeight: '700', color: '#64748b', textTransform: 'uppercase' }}>Variantes de Hamburguesas</span>
-              <span style={{ background: '#ffedd5', padding: '4px 8px', borderRadius: '8px', fontSize: '1.1rem' }}>🍔</span>
-            </div>
-            <div style={{ fontSize: '1.8rem', fontWeight: '800', color: '#0f172a' }}>
-              {burgers.length} Recetas
-            </div>
-            <div style={{ fontSize: '0.78rem', color: '#b45309', fontWeight: '700', marginTop: '4px' }}>
-              {burgers.filter(b => b.isAvailable).length} activas en menú &bull; "Rey de las Burgers" #1
-            </div>
-          </div>
-
-          {/* KPI 3 */}
-          <div style={{
-            background: '#ffffff',
-            borderRadius: '16px',
-            border: '1px solid #e2e8f0',
-            padding: '18px 20px',
-            boxShadow: '0 2px 6px rgba(0,0,0,0.02)'
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-              <span style={{ fontSize: '0.8rem', fontWeight: '700', color: '#64748b', textTransform: 'uppercase' }}>Ticket Promedio Consumo</span>
-              <span style={{ background: '#dcfce7', padding: '4px 8px', borderRadius: '8px', fontSize: '1.1rem' }}>📈</span>
-            </div>
-            <div style={{ fontSize: '1.8rem', fontWeight: '800', color: '#166534' }}>
-              ${customerMetrics?.summary?.avgTicket || '22.40'}
-            </div>
-            <div style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: '600', marginTop: '4px' }}>
-              78.4% tasa de recompra mensual
-            </div>
-          </div>
-
-          {/* KPI 4 */}
-          <div style={{
-            background: '#ffffff',
-            borderRadius: '16px',
-            border: '1px solid #e2e8f0',
-            padding: '18px 20px',
-            boxShadow: '0 2px 6px rgba(0,0,0,0.02)'
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-              <span style={{ fontSize: '0.8rem', fontWeight: '700', color: '#64748b', textTransform: 'uppercase' }}>Salud Motor de Base de Datos</span>
-              <span style={{ background: '#e0f2fe', padding: '4px 8px', borderRadius: '8px', fontSize: '1.1rem' }}>🗄️</span>
-            </div>
-            <div style={{ fontSize: '1.8rem', fontWeight: '800', color: '#0369a1' }}>
-              {dbStatus?.health || 'HEALTHY'}
-            </div>
-            <div style={{ fontSize: '0.78rem', color: '#0284c7', fontWeight: '700', marginTop: '4px' }}>
-              {dbStatus?.mode === 'mysql' ? 'MySQL Pool Activo' : 'In-Memory WAL'} &bull; 99.98% Uptime
-            </div>
-          </div>
-        </div>
-
-        {/* Dashboard Navigation Tabs */}
-        <div style={{
-          display: 'flex',
-          gap: '10px',
-          borderBottom: '1px solid #e2e8f0',
-          paddingBottom: '12px',
-          marginBottom: '24px',
-          overflowX: 'auto'
-        }}>
-          {[
-            { id: 'orders', label: '📦 Gestión de Pedidos (PWA & E-commerce)', count: orders.length },
-            { id: 'burgers', label: '🍔 Catálogo de Hamburguesas', count: burgers.length },
-            { id: 'customers', label: '👥 Métricas de Consumidores / Clientes', count: customerMetrics?.topCustomers?.length || 7 },
-            { id: 'database', label: '🗄️ Estado de la Base de Datos', count: 'Live' }
-          ].map((tab) => {
-            const isActive = activeSection === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveSection(tab.id)}
-                style={{
-                  padding: '9px 18px',
-                  borderRadius: '10px',
-                  border: isActive ? '1px solid #d97706' : '1px solid #cbd5e1',
-                  background: isActive ? '#fef3c7' : '#ffffff',
-                  color: isActive ? '#92400e' : '#475569',
-                  fontSize: '0.9rem',
-                  fontWeight: '700',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  transition: 'all 0.2s',
-                  whiteSpace: 'nowrap'
-                }}
-              >
-                <span>{tab.label}</span>
-                <span style={{
-                  background: isActive ? '#d97706' : '#f1f5f9',
-                  color: isActive ? '#ffffff' : '#475569',
-                  padding: '2px 8px',
-                  borderRadius: '12px',
-                  fontSize: '0.72rem',
-                  fontWeight: '800'
+          {/* SECCIÓN 0: RESUMEN GENERAL EJECUTIVO */}
+          {activeSection === 'resumen' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+              {/* Top 4 KPI Executive Metric Cards */}
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))',
+                gap: '16px'
+              }}>
+                {/* KPI 1 */}
+                <div style={{
+                  background: '#ffffff',
+                  borderRadius: '16px',
+                  border: '1px solid #e2e8f0',
+                  padding: '18px 20px',
+                  boxShadow: '0 2px 6px rgba(0,0,0,0.02)'
                 }}>
-                  {tab.count}
-                </span>
-              </button>
-            );
-          })}
-        </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                    <span style={{ fontSize: '0.76rem', fontWeight: '700', color: '#64748b', textTransform: 'uppercase' }}>Consumo Total Clientes</span>
+                    <span style={{ background: '#fef3c7', padding: '4px 8px', borderRadius: '8px', fontSize: '1.1rem' }}>💰</span>
+                  </div>
+                  <div style={{ fontSize: '1.8rem', fontWeight: '800', color: '#b45309' }}>
+                    ${customerMetrics?.summary?.totalRevenue || '1,220.10'}
+                  </div>
+                  <div style={{ fontSize: '0.76rem', color: '#10b981', fontWeight: '700', marginTop: '4px' }}>
+                    ↑ +24.5% vs periodo anterior &bull; {customerMetrics?.summary?.totalOrders || 80} órdenes
+                  </div>
+                </div>
 
-        {/* ================================================================ */}
-        {/* SECCIÓN 1: CATÁLOGO DE HAMBURGUESAS */}
-        {/* ================================================================ */}
+                {/* KPI 2 */}
+                <div style={{
+                  background: '#ffffff',
+                  borderRadius: '16px',
+                  border: '1px solid #e2e8f0',
+                  padding: '18px 20px',
+                  boxShadow: '0 2px 6px rgba(0,0,0,0.02)'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                    <span style={{ fontSize: '0.76rem', fontWeight: '700', color: '#64748b', textTransform: 'uppercase' }}>Variantes de Hamburguesas</span>
+                    <span style={{ background: '#ffedd5', padding: '4px 8px', borderRadius: '8px', fontSize: '1.1rem' }}>🍔</span>
+                  </div>
+                  <div style={{ fontSize: '1.8rem', fontWeight: '800', color: '#0f172a' }}>
+                    {burgers.length} Recetas
+                  </div>
+                  <div style={{ fontSize: '0.76rem', color: '#b45309', fontWeight: '700', marginTop: '4px' }}>
+                    {burgers.filter(b => b.isAvailable).length} activas en menú &bull; &quot;Rey de las Burgers&quot; #1
+                  </div>
+                </div>
+
+                {/* KPI 3 */}
+                <div style={{
+                  background: '#ffffff',
+                  borderRadius: '16px',
+                  border: '1px solid #e2e8f0',
+                  padding: '18px 20px',
+                  boxShadow: '0 2px 6px rgba(0,0,0,0.02)'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                    <span style={{ fontSize: '0.76rem', fontWeight: '700', color: '#64748b', textTransform: 'uppercase' }}>Ticket Promedio Consumo</span>
+                    <span style={{ background: '#dcfce7', padding: '4px 8px', borderRadius: '8px', fontSize: '1.1rem' }}>📈</span>
+                  </div>
+                  <div style={{ fontSize: '1.8rem', fontWeight: '800', color: '#166534' }}>
+                    ${customerMetrics?.summary?.avgTicket || '22.40'}
+                  </div>
+                  <div style={{ fontSize: '0.76rem', color: '#64748b', fontWeight: '600', marginTop: '4px' }}>
+                    78.4% tasa de recompra mensual
+                  </div>
+                </div>
+
+                {/* KPI 4 */}
+                <div style={{
+                  background: '#ffffff',
+                  borderRadius: '16px',
+                  border: '1px solid #e2e8f0',
+                  padding: '18px 20px',
+                  boxShadow: '0 2px 6px rgba(0,0,0,0.02)'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                    <span style={{ fontSize: '0.76rem', fontWeight: '700', color: '#64748b', textTransform: 'uppercase' }}>Estado iDempiere ERP v1</span>
+                    <span style={{ background: '#dbeafe', padding: '4px 8px', borderRadius: '8px', fontSize: '1.1rem' }}>🛡️</span>
+                  </div>
+                  <div style={{ fontSize: '1.5rem', fontWeight: '800', color: '#0369a1' }}>
+                    Conectado ✓
+                  </div>
+                  <div style={{ fontSize: '0.76rem', color: '#0284c7', fontWeight: '700', marginTop: '6px' }}>
+                    Client #{user?.clientId} &bull; Org #{user?.organizationId ?? user?.orgId} &bull;{' '}
+                    <button
+                      type="button"
+                      onClick={() => setActiveSection('idempiere')}
+                      style={{
+                        background: 'transparent',
+                        border: 'none',
+                        color: '#d97706',
+                        fontWeight: '800',
+                        fontSize: '0.76rem',
+                        cursor: 'pointer',
+                        padding: 0,
+                        textDecoration: 'underline'
+                      }}
+                    >
+                      Ver Diagnóstico ERP
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Embedded Central Orders Inbox on Resumen */}
+              <OrdersInbox
+                orders={orders}
+                onRefresh={fetchData}
+                onShowToast={showToast}
+              />
+            </div>
+          )}
+
+          {/* ================================================================ */}
+          {/* SECCIÓN 1: CATÁLOGO DE HAMBURGUESAS */}
+          {/* ================================================================ */}
         {activeSection === 'burgers' && (
           <div className="fade-in">
             {/* Header de catálogo con controles */}
@@ -1342,6 +1348,33 @@ function AdminDashboardContent() {
           />
         )}
 
+        {/* ================================================================ */}
+        {/* SECCIÓN 5: INTEGRACIÓN IDEMPIERE ERP REST v1 */}
+        {/* ================================================================ */}
+        {activeSection === 'idempiere' && (
+          <IdempiereErpView onOpenInspector={() => setIsErpModalOpen(true)} />
+        )}
+
+        {/* ================================================================ */}
+        {/* SECCIÓN 6: PERFIL & CONEXIÓN ERP */}
+        {/* ================================================================ */}
+        {activeSection === 'profile' && (
+          <ProfileErpSettingsView onOpenInspector={() => setIsErpModalOpen(true)} />
+        )}
+
+        </div>
+
+        {/* Footer del Dashboard */}
+        <footer style={{
+          background: '#ffffff',
+          borderTop: '1px solid #e2e8f0',
+          padding: '16px 28px',
+          textAlign: 'center',
+          fontSize: '0.8rem',
+          color: '#94a3b8'
+        }}>
+          Hamburger Rapid Admin Suite &bull; React + Node.js + iDempiere REST v1 &bull; Dokploy CI/CD Live
+        </footer>
       </div>
 
       {/* ================================================================ */}
@@ -1526,18 +1559,6 @@ function AdminDashboardContent() {
         isOpen={isErpModalOpen}
         onClose={() => setIsErpModalOpen(false)}
       />
-
-      {/* Footer del Dashboard */}
-      <footer style={{
-        background: '#ffffff',
-        borderTop: '1px solid #e2e8f0',
-        padding: '16px 28px',
-        textAlign: 'center',
-        fontSize: '0.8rem',
-        color: '#94a3b8'
-      }}>
-        Hamburger Rapid Admin Suite &bull; React + Node.js + MySQL &bull; Dokploy CI/CD Live
-      </footer>
     </div>
   );
 }

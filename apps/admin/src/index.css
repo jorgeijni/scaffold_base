@@ -50,3 +50,40 @@ body {
 .fade-in {
   animation: fadeIn 0.25s ease-out;
 }
+
+.admin-sidebar-toggle,
+.admin-sidebar-close,
+.admin-sidebar-backdrop {
+  display: none;
+}
+
+@media (max-width: 960px) {
+  .admin-sidebar {
+    position: fixed !important;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    transform: translateX(-105%);
+    transition: transform 0.22s ease;
+    box-shadow: 0 20px 45px rgba(15, 23, 42, 0.22);
+  }
+
+  .admin-sidebar.open {
+    transform: translateX(0);
+  }
+
+  .admin-sidebar-toggle,
+  .admin-sidebar-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .admin-sidebar-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.45);
+    z-index: 35;
+  }
+}

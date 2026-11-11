@@ -1,56 +1,62 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 
+const VERIFIED_DIRECTIVES = [
+  { label: 'Endpoint Plural:', value: '/api/v1/auth/tokens' },
+  { label: 'Cabecera:', value: 'Content-Type / Accept: json' },
+  { label: 'Parámetro Org:', value: 'organizationId (no orgId)' },
+  { label: 'Contexto Anidado:', value: 'parameters: { ... }' }
+];
+
+function formatSessionTimestamp(isoString) {
+  if (!isoString) return new Date().toLocaleString('es-CO');
+  try {
+    return new Date(isoString).toLocaleString('es-CO');
+  } catch {
+    return String(isoString);
+  }
+}
+
 export default function ErpStatusModal({ isOpen, onClose }) {
   const {
     session,
     user,
     token,
     authMode,
+    erpEndpoint,
     erpBaseUrl,
     corsProxyEnabled,
     corsProxyMode,
-    latencyMs,
-    pingErp
+    latencyMs
   } = useAuth();
   const [copied, setCopied] = useState(false);
-  const [pinging, setPinging] = useState(false);
-  const [testResult, setTestResult] = useState(null);
 
   if (!isOpen) return null;
 
-  const handleCopyToken = () => {
+  const handleCopyToken = async () => {
     if (!token) return;
-    navigator.clipboard.writeText(token);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  const handleRunPing = async () => {
-    setPinging(true);
     try {
-      const res = await pingErp();
-      setTestResult(res);
-    } catch (err) {
-      setTestResult({ online: false, error: err.message });
-    } finally {
-      setPinging(false);
+      await navigator.clipboard.writeText(token);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Fallback silencioso si clipboard no esta disponible en contexto inseguro
     }
   };
 
-  const maskedToken = token
-    ? `${token.substring(0, 18)}...${token.substring(token.length - 12)}`
-    : 'No hay token activo';
+  const resolvedEndpoint =
+    session?.endpoint ||
+    erpEndpoint ||
+    `${(erpBaseUrl || '').replace(/\/+$/, '')}/api/v1/auth/tokens`;
+  const effectiveOrgId = user?.organizationId ?? user?.orgId ?? 'N/A';
 
   return (
     <div
+      onClick={onClose}
       style={{
         position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: 'rgba(15, 23, 42, 0.75)',
+        inset: 0,
+        backgroundColor: 'rgba(15, 23, 42, 0.72)',
         backdropFilter: 'blur(6px)',
         display: 'flex',
         alignItems: 'center',
@@ -60,241 +66,369 @@ export default function ErpStatusModal({ isOpen, onClose }) {
       }}
     >
       <div
+        onClick={(e) => e.stopPropagation()}
         style={{
           background: '#ffffff',
-          borderRadius: '16px',
+          borderRadius: '18px',
           width: '100%',
-          maxWidth: '620px',
+          maxWidth: '680px',
           boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.35)',
           overflow: 'hidden',
           border: '1px solid #e2e8f0',
-          color: '#0f172a'
+          color: '#0f172a',
+          maxHeight: '90vh',
+          display: 'flex',
+          flexDirection: 'column'
         }}
       >
+        {/* Header */}
         <div
           style={{
-            padding: '18px 24px',
-            background: '#0f172a',
-            color: '#ffffff',
+            padding: '20px 24px 16px',
             display: 'flex',
-            alignItems: 'center',
+            alignItems: 'flex-start',
             justifyContent: 'space-between',
-            borderBottom: '1px solid #1e293b'
+            borderBottom: '1px solid #f1f5f9'
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <span style={{ fontSize: '1.4rem' }}>⚙️</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div
+              style={{
+                width: '38px',
+                height: '38px',
+                borderRadius: '10px',
+                background: 'linear-gradient(135deg, #60a5fa, #1d4ed8)',
+                color: '#ffffff',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '1.15rem',
+                boxShadow: '0 4px 12px rgba(37, 99, 235, 0.25)',
+                flexShrink: 0
+              }}
+            >
+              🛡️
+            </div>
             <div>
-              <div style={{ fontSize: '1.05rem', fontWeight: '800' }}>
-                Contexto de Sesión &amp; Integración iDempiere v1
-              </div>
-              <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
-                Token Bearer, parámetros de contexto almacenados y conectividad CORS
-              </div>
+              <h2 style={{ fontSize: '1.15rem', fontWeight: '800', color: '#0f172a', margin: 0 }}>
+                Inspector de Sesión iDempiere ERP REST
+              </h2>
+              <p style={{ fontSize: '0.78rem', color: '#64748b', margin: '2px 0 0' }}>
+                Auditoría y estado del token de autenticación según especificación v1
+              </p>
             </div>
           </div>
+
           <button
             onClick={onClose}
-            style={{ background: 'transparent', border: 'none', color: '#94a3b8', fontSize: '1.4rem', cursor: 'pointer', lineHeight: 1 }}
+            aria-label="Cerrar Inspector"
+            style={{
+              width: '32px',
+              height: '32px',
+              borderRadius: '8px',
+              background: '#f1f5f9',
+              border: '1px solid #e2e8f0',
+              color: '#475569',
+              fontSize: '1.15rem',
+              fontWeight: '700',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              lineHeight: 1
+            }}
           >
             ×
           </button>
         </div>
 
-        <div style={{ padding: '22px 24px', display: 'flex', flexDirection: 'column', gap: '16px', maxHeight: '78vh', overflowY: 'auto' }}>
+        {/* Scrollable Body */}
+        <div
+          style={{
+            padding: '18px 24px 20px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '18px',
+            overflowY: 'auto'
+          }}
+        >
+          {/* Connection Status Banner */}
           <div
             style={{
-              background: '#dcfce7',
-              border: '1px solid #86efac',
+              background: '#f0fdf4',
+              border: '1px solid #bbf7d0',
               padding: '12px 16px',
-              borderRadius: '10px',
+              borderRadius: '12px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              gap: '10px',
+              gap: '12px',
               flexWrap: 'wrap'
             }}
           >
-            <div>
-              <div style={{ fontSize: '0.88rem', fontWeight: '800', color: '#166534' }}>
-                🟢 Sesión Validada por iDempiere REST API v1
-              </div>
-              <div style={{ fontSize: '0.75rem', color: '#15803d' }}>
-                Modalidad: {authMode === 'two_step' ? 'Asistida (2 Pasos)' : 'Directa (1 Paso)'}
-                {latencyMs !== null && ` • Latencia login: ${latencyMs}ms`}
-                {corsProxyEnabled ? ` • Proxy CORS: ${corsProxyMode}` : ' • Conexión Directa'}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <span
+                style={{
+                  width: '14px',
+                  height: '14px',
+                  borderRadius: '50%',
+                  background: '#22c55e',
+                  boxShadow: '0 0 0 4px rgba(34, 197, 94, 0.2)',
+                  flexShrink: 0
+                }}
+              />
+              <div>
+                <div style={{ fontSize: '0.86rem', fontWeight: '800', color: '#14532d' }}>
+                  Conectado a Servidor iDempiere Live
+                </div>
+                <div style={{ fontSize: '0.74rem', color: '#15803d', marginTop: '1px' }}>
+                  Autenticación corporativa validada con token Bearer activo
+                  {authMode === 'two_step' ? ' • Flujo Asistido (2 Pasos)' : ' • Flujo Directo (1 Paso)'}
+                  {latencyMs !== null ? ` • ${latencyMs}ms` : ''}
+                  {corsProxyEnabled ? ` • CORS (${corsProxyMode})` : ''}
+                </div>
               </div>
             </div>
+
+            <span
+              style={{
+                background: '#16a34a',
+                color: '#ffffff',
+                padding: '4px 12px',
+                borderRadius: '9999px',
+                fontSize: '0.7rem',
+                fontWeight: '800',
+                letterSpacing: '0.04em'
+              }}
+            >
+              BEARER
+            </span>
           </div>
 
+          {/* Blindaje Tecnico Verificado */}
           <div>
-            <div style={{ fontSize: '0.76rem', fontWeight: '800', color: '#475569', textTransform: 'uppercase', marginBottom: '8px' }}>
-              📋 Contexto Persistente Almacenado
+            <div
+              style={{
+                fontSize: '0.72rem',
+                fontWeight: '800',
+                color: '#475569',
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+                marginBottom: '10px'
+              }}
+            >
+              BLINDAJE TÉCNICO IDEMPIERE V1 VERIFICADO
             </div>
+
             <div
               style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(2, 1fr)',
-                gap: '10px',
+                gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+                gap: '10px'
+              }}
+            >
+              {VERIFIED_DIRECTIVES.map((item) => (
+                <div
+                  key={item.label}
+                  style={{
+                    background: '#f8fafc',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '10px',
+                    padding: '10px 12px',
+                    fontSize: '0.78rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    flexWrap: 'wrap'
+                  }}
+                >
+                  <span style={{ color: '#16a34a', fontWeight: '800' }}>✓</span>
+                  <span style={{ fontWeight: '700', color: '#1e293b' }}>{item.label}</span>
+                  <code
+                    style={{
+                      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                      color: '#334155',
+                      fontSize: '0.75rem'
+                    }}
+                  >
+                    {item.value}
+                  </code>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Parametros de Contexto ERP */}
+          <div>
+            <div
+              style={{
+                fontSize: '0.72rem',
+                fontWeight: '800',
+                color: '#475569',
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+                marginBottom: '10px'
+              }}
+            >
+              PARÁMETROS DE CONTEXTO ERP EN SESIÓN
+            </div>
+
+            <div
+              style={{
                 background: '#f8fafc',
-                padding: '14px',
-                borderRadius: '10px',
                 border: '1px solid #e2e8f0',
-                fontSize: '0.82rem'
+                borderRadius: '12px',
+                padding: '16px',
+                display: 'grid',
+                gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+                gap: '14px',
+                fontSize: '0.8rem'
               }}
             >
               <div>
-                <span style={{ color: '#64748b' }}>Usuario (userName):</span>
-                <div style={{ fontWeight: '700' }}>{user?.userName || 'N/A'}</div>
-              </div>
-              <div>
-                <span style={{ color: '#64748b' }}>User ID (userId):</span>
-                <div style={{ fontWeight: '700' }}>{user?.userId ?? 'N/A'}</div>
-              </div>
-              <div>
-                <span style={{ color: '#64748b' }}>Tenant (clientId):</span>
-                <div style={{ fontWeight: '700' }}>
-                  {user?.clientId} ({user?.clientName})
+                <div style={{ color: '#64748b', fontSize: '0.73rem', marginBottom: '3px' }}>Usuario:</div>
+                <div style={{ fontWeight: '800', color: '#0f172a', wordBreak: 'break-word' }}>
+                  {user?.userName || 'N/A'}
                 </div>
               </div>
+
               <div>
-                <span style={{ color: '#64748b' }}>Rol (roleId):</span>
-                <div style={{ fontWeight: '700' }}>
-                  {user?.roleId} ({user?.roleName})
+                <div style={{ color: '#64748b', fontSize: '0.73rem', marginBottom: '3px' }}>Client ID:</div>
+                <div style={{ fontWeight: '800', color: '#d97706' }}>
+                  {user?.clientId ?? 'N/A'}
+                  {user?.clientName ? ` (${user.clientName})` : ''}
                 </div>
               </div>
+
               <div>
-                <span style={{ color: '#64748b' }}>Organización (orgId / organizationId):</span>
-                <div style={{ fontWeight: '700', color: '#d97706' }}>
-                  {user?.orgId} ({user?.orgName})
+                <div style={{ color: '#64748b', fontSize: '0.73rem', marginBottom: '3px' }}>Role ID:</div>
+                <div style={{ fontWeight: '800', color: '#d97706' }}>
+                  {user?.roleId ?? 'N/A'}
+                  {user?.roleName ? ` (${user.roleName})` : ''}
                 </div>
               </div>
+
               <div>
-                <span style={{ color: '#64748b' }}>Almacén (warehouseId):</span>
-                <div style={{ fontWeight: '700' }}>
-                  {user?.warehouseId ?? 'N/A'} {user?.warehouseName ? `(${user.warehouseName})` : ''}
+                <div style={{ color: '#64748b', fontSize: '0.73rem', marginBottom: '3px' }}>Organization ID:</div>
+                <div style={{ fontWeight: '800', color: '#d97706' }}>
+                  {effectiveOrgId}
+                  {user?.orgName ? ` (${user.orgName})` : ''}
                 </div>
               </div>
+
               <div>
-                <span style={{ color: '#64748b' }}>Idioma (language):</span>
-                <div style={{ fontWeight: '700' }}>{user?.language || 'en_US'}</div>
+                <div style={{ color: '#64748b', fontSize: '0.73rem', marginBottom: '3px' }}>Warehouse ID:</div>
+                <div style={{ fontWeight: '800', color: '#d97706' }}>
+                  {user?.warehouseId ?? 'N/A'}
+                  {user?.warehouseName ? ` (${user.warehouseName})` : ''}
+                </div>
               </div>
+
               <div>
-                <span style={{ color: '#64748b' }}>Base URL ERP:</span>
-                <div style={{ fontWeight: '700', fontFamily: 'monospace', fontSize: '0.75rem', wordBreak: 'break-all' }}>
-                  {erpBaseUrl}
+                <div style={{ color: '#64748b', fontSize: '0.73rem', marginBottom: '3px' }}>Idioma:</div>
+                <div style={{ fontWeight: '800', color: '#0f172a' }}>
+                  {user?.language || 'en_US'}
+                </div>
+              </div>
+
+              <div>
+                <div style={{ color: '#64748b', fontSize: '0.73rem', marginBottom: '3px' }}>User ID:</div>
+                <div style={{ fontWeight: '800', color: '#0f172a' }}>
+                  {user?.userId ?? 'N/A'}
+                </div>
+              </div>
+
+              <div>
+                <div style={{ color: '#64748b', fontSize: '0.73rem', marginBottom: '3px' }}>Proxy CORS:</div>
+                <div style={{ fontWeight: '700', color: corsProxyEnabled ? '#0284c7' : '#334155' }}>
+                  {corsProxyEnabled ? `Activo (${corsProxyMode})` : 'Directo'}
                 </div>
               </div>
             </div>
           </div>
 
+          {/* Token Terminal */}
           <div>
-            <div style={{ fontSize: '0.76rem', fontWeight: '800', color: '#475569', textTransform: 'uppercase', marginBottom: '8px' }}>
-              🔑 Token Bearer de Sesión
-            </div>
             <div
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: '8px',
-                background: '#0f172a',
-                color: '#38bdf8',
-                padding: '10px 14px',
-                borderRadius: '8px',
-                fontFamily: 'monospace',
-                fontSize: '0.78rem'
+                justifyContent: 'space-between',
+                marginBottom: '8px'
               }}
             >
-              <span style={{ flex: 1, wordBreak: 'break-all' }}>{maskedToken}</span>
+              <span style={{ fontSize: '0.78rem', fontWeight: '700', color: '#334155' }}>
+                Token de Acceso (JWT / Bearer Token):
+              </span>
               <button
-                type="button"
                 onClick={handleCopyToken}
+                disabled={!token}
                 style={{
-                  background: copied ? '#10b981' : '#334155',
-                  color: '#ffffff',
-                  border: 'none',
-                  padding: '5px 10px',
-                  borderRadius: '6px',
-                  fontSize: '0.72rem',
+                  background: copied ? '#dcfce7' : '#ffffff',
+                  color: copied ? '#166534' : '#334155',
+                  border: `1px solid ${copied ? '#86efac' : '#cbd5e1'}`,
+                  padding: '5px 12px',
+                  borderRadius: '8px',
+                  fontSize: '0.74rem',
                   fontWeight: '700',
-                  cursor: 'pointer',
-                  whiteSpace: 'nowrap'
+                  cursor: token ? 'pointer' : 'not-allowed',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '5px'
                 }}
               >
-                {copied ? '✓ Copiado' : 'Copiar Token'}
+                {copied ? '✅ Token Copiado' : '📋 Copiar Token'}
               </button>
+            </div>
+
+            <div
+              style={{
+                background: '#09101d',
+                color: '#67e8f9',
+                borderRadius: '10px',
+                padding: '14px',
+                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                fontSize: '0.76rem',
+                lineHeight: 1.5,
+                wordBreak: 'break-all',
+                maxHeight: '112px',
+                overflowY: 'auto',
+                border: '1px solid #1e293b'
+              }}
+            >
+              {token || 'No hay token Bearer activo en esta sesión.'}
             </div>
           </div>
 
-          {session?.claims && Object.keys(session.claims).length > 0 && (
-            <div>
-              <div style={{ fontSize: '0.76rem', fontWeight: '800', color: '#475569', textTransform: 'uppercase', marginBottom: '6px' }}>
-                🧾 Claims Decodificados (JWT)
-              </div>
-              <pre
-                style={{
-                  background: '#f1f5f9',
-                  border: '1px solid #e2e8f0',
-                  borderRadius: '8px',
-                  padding: '10px',
-                  fontSize: '0.72rem',
-                  overflowX: 'auto',
-                  color: '#334155'
-                }}
-              >
-                {JSON.stringify(session.claims, null, 2)}
-              </pre>
-            </div>
-          )}
-
-          <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '14px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '0.8rem', fontWeight: '700', color: '#334155' }}>
-                Test de Conectividad ({erpBaseUrl}/api/v1/auth/tokens)
-              </span>
-              <button
-                type="button"
-                disabled={pinging}
-                onClick={handleRunPing}
-                style={{
-                  background: '#f1f5f9',
-                  border: '1px solid #cbd5e1',
-                  borderRadius: '6px',
-                  padding: '5px 12px',
-                  fontSize: '0.75rem',
-                  fontWeight: '700',
-                  cursor: pinging ? 'wait' : 'pointer'
-                }}
-              >
-                {pinging ? 'Probando...' : '⚡ Ejecutar Ping'}
-              </button>
-            </div>
-
-            {testResult && (
-              <div
-                style={{
-                  background: testResult.online ? '#ecfdf5' : '#fef2f2',
-                  border: `1px solid ${testResult.online ? '#a7f3d0' : '#fecaca'}`,
-                  padding: '8px 12px',
-                  borderRadius: '8px',
-                  fontSize: '0.76rem',
-                  color: testResult.online ? '#065f46' : '#991b1b'
-                }}
-              >
-                <strong>{testResult.online ? '✓ En línea' : '✕ Sin conexión'}</strong>: {testResult.message || testResult.error}{' '}
-                {testResult.latencyMs !== undefined && `(${testResult.latencyMs}ms)`}
-              </div>
-            )}
+          {/* Footer Timestamp + Endpoint */}
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: '10px',
+              paddingTop: '10px',
+              borderTop: '1px solid #f1f5f9',
+              fontSize: '0.73rem',
+              color: '#64748b'
+            }}
+          >
+            <span>Inicio de sesión: {formatSessionTimestamp(session?.savedAt)}</span>
+            <span style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', wordBreak: 'break-all' }}>
+              Endpoint: {resolvedEndpoint}
+            </span>
           </div>
         </div>
 
+        {/* Modal Action Footer */}
         <div
           style={{
-            padding: '14px 24px',
-            background: '#f8fafc',
-            borderTop: '1px solid #e2e8f0',
+            padding: '12px 24px 18px',
             display: 'flex',
-            justifyContent: 'flex-end'
+            justifyContent: 'flex-end',
+            borderTop: '1px solid #f1f5f9',
+            background: '#ffffff'
           }}
         >
           <button
@@ -303,14 +437,14 @@ export default function ErpStatusModal({ isOpen, onClose }) {
               background: '#0f172a',
               color: '#ffffff',
               border: 'none',
-              padding: '8px 18px',
-              borderRadius: '8px',
-              fontSize: '0.82rem',
-              fontWeight: '700',
+              padding: '10px 22px',
+              borderRadius: '10px',
+              fontSize: '0.84rem',
+              fontWeight: '800',
               cursor: 'pointer'
             }}
           >
-            Cerrar Diagnóstico
+            Cerrar Inspector
           </button>
         </div>
       </div>

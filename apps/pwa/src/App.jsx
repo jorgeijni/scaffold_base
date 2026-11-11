@@ -130,14 +130,17 @@ const DEFAULT_PRODUCTS = [
   }
 ];
 
-const CATEGORIES = [
-  { id: 'All', name: 'All Items', icon: '🍽️', count: 9 },
-  { id: 'Buckets', name: 'Buckets', icon: '🍗', count: 2 },
-  { id: 'Burgers', name: 'Burgers', icon: '🍔', count: 4 },
-  { id: 'Tenders', name: 'Tenders', icon: '🥓', count: 1 },
-  { id: 'Sides', name: 'Sides', icon: '🍟', count: 1 },
-  { id: 'Drinks', name: 'Drinks', icon: '🥤', count: 1 }
-];
+const CATEGORY_ICON_MAP = {
+  All: '🍽️',
+  Especiales: '👑',
+  'Clásicas': '🍔',
+  'Pollo Crispy': '🍗',
+  Buckets: '🍗',
+  Burgers: '🍔',
+  Tenders: '🥓',
+  Sides: '🍟',
+  Drinks: '🥤'
+};
 
 const OFFERS = [
   {
@@ -410,7 +413,8 @@ export default function App() {
       })),
       total: parseFloat(grandTotal.toFixed(2)),
       address: userProfile.address,
-      coupon: appliedCoupon ? appliedCoupon.code : null
+      coupon: appliedCoupon ? appliedCoupon.code : null,
+      channel: 'PWA Mobile'
     };
 
     try {
@@ -481,6 +485,15 @@ export default function App() {
     showToast('🔄 Estado de la orden avanzado para simulación');
   };
 
+  // Derive categories dynamically from active products (backend API or offline fallback)
+  const categoryNames = ['All', ...Array.from(new Set(products.map(p => p.category).filter(Boolean)))];
+  const categoriesList = categoryNames.map(cat => ({
+    id: cat,
+    name: cat === 'All' ? 'Todos' : cat,
+    icon: CATEGORY_ICON_MAP[cat] || '🍔',
+    count: cat === 'All' ? products.length : products.filter(p => p.category === cat).length
+  }));
+
   // Filtered Products
   const filteredProducts = products.filter(p => {
     const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -489,7 +502,9 @@ export default function App() {
     return matchesSearch && matchesCat;
   });
 
-  const popularCombos = products.slice(0, 4);
+  const popularCombos = (searchQuery.trim() || selectedCategory !== 'All')
+    ? filteredProducts
+    : products.slice(0, 4);
 
   return (
     <div style={{
@@ -821,7 +836,7 @@ export default function App() {
                 </p>
 
                 <button
-                  onClick={() => handleOpenCustomization(DEFAULT_PRODUCTS[0])}
+                  onClick={() => handleOpenCustomization(products[0] || DEFAULT_PRODUCTS[0])}
                   style={{
                     background: 'linear-gradient(135deg, #e03e1a, #c43212)',
                     color: '#ffffff',
@@ -891,7 +906,7 @@ export default function App() {
               paddingBottom: '10px',
               marginBottom: '22px'
             }} className="no-scrollbar">
-              {CATEGORIES.map(cat => {
+              {categoriesList.map(cat => {
                 const isSelected = selectedCategory === cat.id;
                 return (
                   <button
@@ -946,7 +961,7 @@ export default function App() {
                 marginBottom: '14px'
               }}>
                 <h3 style={{ fontSize: '1.2rem', fontWeight: '800', color: '#1a1614', letterSpacing: '-0.02em' }}>
-                  Popular Combos
+                  {(searchQuery.trim() || selectedCategory !== 'All') ? `Resultados (${popularCombos.length})` : 'Popular Combos'}
                 </h3>
                 <button
                   onClick={() => setActiveTab('menu')}
@@ -1227,23 +1242,23 @@ export default function App() {
 
             {/* Filter Pills */}
             <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '10px', marginBottom: '16px' }} className="no-scrollbar">
-              {['All', 'Buckets', 'Burgers', 'Tenders', 'Sides', 'Drinks'].map(cat => (
+              {categoriesList.map(cat => (
                 <button
-                  key={cat}
-                  onClick={() => setSelectedCategory(cat)}
+                  key={cat.id}
+                  onClick={() => setSelectedCategory(cat.id)}
                   style={{
                     padding: '8px 16px',
                     borderRadius: '20px',
-                    border: selectedCategory === cat ? '1px solid #e03e1a' : '1px solid #f0ebe4',
-                    background: selectedCategory === cat ? '#e03e1a' : '#ffffff',
-                    color: selectedCategory === cat ? '#ffffff' : '#57534e',
+                    border: selectedCategory === cat.id ? '1px solid #e03e1a' : '1px solid #f0ebe4',
+                    background: selectedCategory === cat.id ? '#e03e1a' : '#ffffff',
+                    color: selectedCategory === cat.id ? '#ffffff' : '#57534e',
                     fontSize: '0.8rem',
                     fontWeight: '700',
                     cursor: 'pointer',
                     whiteSpace: 'nowrap'
                   }}
                 >
-                  {cat === 'All' ? 'Todos' : cat}
+                  {cat.name} ({cat.count})
                 </button>
               ))}
             </div>
