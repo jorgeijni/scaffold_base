@@ -19,6 +19,7 @@ export const CORS_PROXY_PRESETS = {
 };
 
 export const DEFAULT_LANGUAGES = [
+  { code: 'es_PE', name: 'Español Perú (es_PE)' },
   { code: 'en_US', name: 'English (US)' },
   { code: 'es_ES', name: 'Español (ES)' },
   { code: 'es_MX', name: 'Español (MX)' },
@@ -56,7 +57,12 @@ export class AuthService {
       baseUrl: options.baseUrl || GARDENWORLD_DEMO_PRESET.baseUrl,
       corsProxyEnabled: options.corsProxyEnabled ?? true,
       corsProxyMode: options.corsProxyMode || CORS_PROXY_PRESETS.LOCAL,
-      corsProxyCustomUrl: options.corsProxyCustomUrl || 'https://corsproxy.io/?'
+      corsProxyCustomUrl: options.corsProxyCustomUrl || 'https://corsproxy.io/?',
+      enableMultiTenantLogin: options.enableMultiTenantLogin ?? false,
+      defaultParameters: {
+        ...GARDENWORLD_DEMO_PRESET.parameters,
+        ...(options.defaultParameters || {})
+      }
     });
 
     this.session = this.loadSession();
@@ -100,7 +106,15 @@ export class AuthService {
       const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(this.configStorageKey) : null;
       if (raw) {
         const parsed = JSON.parse(raw);
-        return { ...defaults, ...parsed, baseUrl: this.normalizeBaseUrl(parsed.baseUrl || defaults.baseUrl) };
+        return {
+          ...defaults,
+          ...parsed,
+          baseUrl: this.normalizeBaseUrl(parsed.baseUrl || defaults.baseUrl),
+          defaultParameters: {
+            ...(defaults.defaultParameters || {}),
+            ...(parsed.defaultParameters || {})
+          }
+        };
       }
     } catch {
       // Ignorar errores de almacenamiento corrupto
@@ -109,14 +123,21 @@ export class AuthService {
   }
 
   getConnectionConfig() {
-    return { ...this.config };
+    return {
+      ...this.config,
+      defaultParameters: { ...(this.config.defaultParameters || GARDENWORLD_DEMO_PRESET.parameters) }
+    };
   }
 
   setConnectionConfig(partial = {}) {
     this.config = {
       ...this.config,
       ...partial,
-      baseUrl: this.normalizeBaseUrl(partial.baseUrl ?? this.config.baseUrl)
+      baseUrl: this.normalizeBaseUrl(partial.baseUrl ?? this.config.baseUrl),
+      defaultParameters: {
+        ...(this.config.defaultParameters || GARDENWORLD_DEMO_PRESET.parameters),
+        ...(partial.defaultParameters || {})
+      }
     };
     try {
       if (typeof localStorage !== 'undefined') {

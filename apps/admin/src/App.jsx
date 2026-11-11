@@ -33,8 +33,8 @@ const SECTION_META = {
     subtitle: 'Plataforma comercial y operacional de Hamburger Rapid • Conectividad REST v1'
   },
   profile: {
-    title: 'Perfil & Conexión ERP',
-    subtitle: 'Contexto de sesión activo, URL base de iDempiere y configuración de Proxy CORS'
+    title: 'Perfil de Administrador & Configuración ERP',
+    subtitle: 'Plataforma comercial y operacional de Hamburger Rapid • Dokploy CI/CD Live'
   }
 };
 
@@ -1359,7 +1359,11 @@ function AdminDashboardContent() {
         {/* SECCIÓN 6: PERFIL & CONEXIÓN ERP */}
         {/* ================================================================ */}
         {activeSection === 'profile' && (
-          <ProfileErpSettingsView onOpenInspector={() => setIsErpModalOpen(true)} />
+          <ProfileErpSettingsView
+            onOpenInspector={() => setIsErpModalOpen(true)}
+            onCatalogSynced={fetchData}
+            onShowToast={showToast}
+          />
         )}
 
         </div>
