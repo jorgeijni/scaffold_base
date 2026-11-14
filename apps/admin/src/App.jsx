@@ -6,11 +6,16 @@ import OrdersInbox from './components/OrdersInbox';
 import AdminSidebar from './components/AdminSidebar';
 import IdempiereErpView from './components/IdempiereErpView';
 import ProfileErpSettingsView from './components/ProfileErpSettingsView';
+import MasterCatalogsView from './components/MasterCatalogsView';
 
 const SECTION_META = {
   resumen: {
     title: 'Resumen General Ejecutivo',
     subtitle: 'Indicadores clave, flujo multicanal PWA/E-commerce e integración ERP'
+  },
+  catalogs: {
+    title: 'Catálogos Maestros ERP & Base de Datos SQLite',
+    subtitle: 'Mantenimiento de tablas maestras y sincronización con iDempiere ERP'
   },
   burgers: {
     title: 'Catálogo de Hamburguesas',
@@ -25,8 +30,8 @@ const SECTION_META = {
     subtitle: 'Comportamiento de compra, ticket promedio y recurrencia de clientes'
   },
   database: {
-    title: 'Estado del Motor de Base de Datos',
-    subtitle: 'Monitoreo de salud, latencia de consultas y persistencia de datos'
+    title: 'Estado del Motor de Base de Datos SQLite',
+    subtitle: 'Persistencia relacional ACID, monitoreo de modo WAL y salud del motor relacional'
   },
   idempiere: {
     title: 'Integración iDempiere ERP REST v1',
@@ -687,6 +692,13 @@ function AdminDashboardContent() {
           )}
 
           {/* ================================================================ */}
+          {/* SECCIÓN NUEVA: CATÁLOGOS MAESTROS ERP (MANTENIBLES + SOLO LECTURA) */}
+          {/* ================================================================ */}
+          {activeSection === 'catalogs' && (
+            <MasterCatalogsView />
+          )}
+
+          {/* ================================================================ */}
           {/* SECCIÓN 1: CATÁLOGO DE HAMBURGUESAS */}
           {/* ================================================================ */}
         {activeSection === 'burgers' && (
@@ -1135,17 +1147,17 @@ function AdminDashboardContent() {
         )}
 
         {/* ================================================================ */}
-        {/* SECCIÓN 3: ESTADO DE LA BASE DE DATOS */}
+        {/* SECCIÓN 3: ESTADO DE LA BASE DE DATOS SQLITE */}
         {/* ================================================================ */}
         {activeSection === 'database' && (
           <div className="fade-in">
             <div style={{ marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
               <div>
                 <h2 style={{ fontSize: '1.4rem', fontWeight: '800', color: '#0f172a' }}>
-                  Monitor de Salud e Infraestructura de Base de Datos
+                  Monitor de Salud del Motor SQLite Relacional
                 </h2>
                 <p style={{ fontSize: '0.85rem', color: '#64748b' }}>
-                  Inspección en tiempo real de persistencia relacional, latencias de red y pool de conexiones.
+                  Persistencia relacional ACID en archivo local / volumen Docker, concurrencia en modo WAL y latencias en microsegundos.
                 </p>
               </div>
 
@@ -1168,7 +1180,7 @@ function AdminDashboardContent() {
                   }}
                 >
                   <span>⚡</span>
-                  <span>{isPinging ? 'Midiendo...' : 'Hacer Ping a DB'}</span>
+                  <span>{isPinging ? 'Midiendo...' : 'Hacer Ping a SQLite'}</span>
                 </button>
 
                 <button
@@ -1189,7 +1201,7 @@ function AdminDashboardContent() {
               </div>
             </div>
 
-            {/* Tarjeta Principal de Diagnóstico */}
+            {/* Tarjeta Principal de Diagnóstico SQLite */}
             <div style={{
               background: '#ffffff',
               borderRadius: '16px',
@@ -1204,21 +1216,21 @@ function AdminDashboardContent() {
                     width: '54px',
                     height: '54px',
                     borderRadius: '14px',
-                    background: dbStatus?.mode === 'mysql' ? '#dcfce7' : '#fef3c7',
-                    border: `1px solid ${dbStatus?.mode === 'mysql' ? '#86efac' : '#fde68a'}`,
+                    background: '#e0f2fe',
+                    border: '1px solid #bae6fd',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     fontSize: '1.8rem'
                   }}>
-                    {dbStatus?.mode === 'mysql' ? '🐬' : '⚡'}
+                    🗄️
                   </div>
                   <div>
                     <h3 style={{ fontSize: '1.3rem', fontWeight: '800', color: '#0f172a' }}>
-                      {dbStatus?.mode === 'mysql' ? 'Motor MySQL Relacional Conectado' : 'Modo In-Memory Transaccional Activo'}
+                      Motor SQLite 3 Relacional Activo (node:sqlite)
                     </h3>
                     <div style={{ fontSize: '0.82rem', color: '#64748b' }}>
-                      Persistencia: {dbStatus?.mode === 'mysql' ? 'Disco Permanente (ACID)' : 'Memoria RAM de Alta Velocidad (Fall-back automático)'}
+                      Persistencia: Archivo de datos relacional con Journaling WAL (Write-Ahead Logging) permanente y claves foráneas habilitadas.
                     </div>
                   </div>
                 </div>
@@ -1232,7 +1244,7 @@ function AdminDashboardContent() {
                   fontSize: '0.82rem',
                   fontWeight: '800'
                 }}>
-                  ● ESTADO SALUDABLE (HEALTHY)
+                  ● SQLITE PRODUCTION HEALTHY
                 </span>
               </div>
 
@@ -1247,44 +1259,44 @@ function AdminDashboardContent() {
                 padding: '16px'
               }}>
                 <div>
-                  <small style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: '700', textTransform: 'uppercase' }}>Host del Servidor</small>
-                  <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#0f172a', marginTop: '2px' }}>
-                    {dbStatus?.host || '127.0.0.1 (Local)'}
+                  <small style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: '700', textTransform: 'uppercase' }}>Ubicación Archivo DB</small>
+                  <div style={{ fontSize: '0.85rem', fontWeight: '800', color: '#0f172a', marginTop: '2px', wordBreak: 'break-all' }}>
+                    {dbStatus?.database || 'database.sqlite'}
                   </div>
                 </div>
 
                 <div>
-                  <small style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: '700', textTransform: 'uppercase' }}>Puerto TCP</small>
-                  <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#0f172a', marginTop: '2px' }}>
-                    {dbStatus?.port || '3306'}
+                  <small style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: '700', textTransform: 'uppercase' }}>Modo Transaccional</small>
+                  <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#0284c7', marginTop: '2px' }}>
+                    {dbStatus?.journalMode || 'WAL (Concurrente)'}
                   </div>
                 </div>
 
                 <div>
-                  <small style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: '700', textTransform: 'uppercase' }}>Base de Datos</small>
+                  <small style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: '700', textTransform: 'uppercase' }}>Claves Foráneas (FK)</small>
+                  <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#166534', marginTop: '2px' }}>
+                    {dbStatus?.foreignKeys || 'ENABLED'}
+                  </div>
+                </div>
+
+                <div>
+                  <small style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: '700', textTransform: 'uppercase' }}>Tamaño en Disco</small>
                   <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#b45309', marginTop: '2px' }}>
-                    {dbStatus?.database || 'hamburger_rapid_db'}
-                  </div>
-                </div>
-
-                <div>
-                  <small style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: '700', textTransform: 'uppercase' }}>Usuario DB</small>
-                  <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#0f172a', marginTop: '2px' }}>
-                    {dbStatus?.user || 'root / app'}
+                    {dbStatus?.fileSizeKb ?? 4} KB
                   </div>
                 </div>
 
                 <div>
                   <small style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: '700', textTransform: 'uppercase' }}>Latencia Medida</small>
                   <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#10b981', marginTop: '2px' }}>
-                    {pingLatency !== null ? `${pingLatency} ms` : `${dbStatus?.latencyMs || 2} ms`}
+                    {pingLatency !== null ? `${pingLatency} ms` : `${dbStatus?.latencyMs || 1} ms`}
                   </div>
                 </div>
 
                 <div>
-                  <small style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: '700', textTransform: 'uppercase' }}>Pool de Conexiones</small>
+                  <small style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: '700', textTransform: 'uppercase' }}>Conexiones Activas</small>
                   <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#0f172a', marginTop: '2px' }}>
-                    {dbStatus?.poolConnections?.active || 2} Activas / {dbStatus?.poolConnections?.totalLimit || 10} Max
+                    1 Conexión Nativa WAL (Lecturas ilimitadas)
                   </div>
                 </div>
               </div>
@@ -1292,25 +1304,61 @@ function AdminDashboardContent() {
               {/* Conteo de Tablas y Registros */}
               <div style={{ marginTop: '20px' }}>
                 <h4 style={{ fontSize: '0.95rem', fontWeight: '800', color: '#0f172a', marginBottom: '12px' }}>
-                  Conteo de Entidades y Registros Auditados
+                  Conteo de Entidades en las Tablas Maestras SQLite
                 </h4>
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
                   <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '12px' }}>
                     <div style={{ fontSize: '1.4rem', fontWeight: '800', color: '#b45309' }}>
-                      {burgers.length}
+                      {dbStatus?.entityCounts?.productCategories ?? 5}
                     </div>
                     <div style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: '700' }}>
-                      🍔 Registros en Tabla "products"
+                      🏷️ Categorías Productos (M_Product_Category)
+                    </div>
+                  </div>
+
+                  <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '12px' }}>
+                    <div style={{ fontSize: '1.4rem', fontWeight: '800', color: '#ea580c' }}>
+                      {dbStatus?.entityCounts?.products ?? burgers.length}
+                    </div>
+                    <div style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: '700' }}>
+                      🍔 Productos Activos (M_Product)
                     </div>
                   </div>
 
                   <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '12px' }}>
                     <div style={{ fontSize: '1.4rem', fontWeight: '800', color: '#0284c7' }}>
-                      {customerMetrics?.topCustomers?.length || 7}
+                      {dbStatus?.entityCounts?.priceLists ?? 3}
                     </div>
                     <div style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: '700' }}>
-                      👥 Clientes en "consumers"
+                      💲 Listas de Precios (M_PriceList)
+                    </div>
+                  </div>
+
+                  <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '12px' }}>
+                    <div style={{ fontSize: '1.4rem', fontWeight: '800', color: '#4f46e5' }}>
+                      {dbStatus?.entityCounts?.customerCategories ?? 5}
+                    </div>
+                    <div style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: '700' }}>
+                      👥 Grupos de Clientes (C_BP_Group)
+                    </div>
+                  </div>
+
+                  <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '12px' }}>
+                    <div style={{ fontSize: '1.4rem', fontWeight: '800', color: '#059669' }}>
+                      {dbStatus?.entityCounts?.customers ?? (customerMetrics?.topCustomers?.length || 7)}
+                    </div>
+                    <div style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: '700' }}>
+                      👤 Clientes Registrados (C_BPartner)
+                    </div>
+                  </div>
+
+                  <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '12px' }}>
+                    <div style={{ fontSize: '1.4rem', fontWeight: '800', color: '#dc2626' }}>
+                      {dbStatus?.entityCounts?.taxes ?? 4}
+                    </div>
+                    <div style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: '700' }}>
+                      🏛️ Impuestos (C_Tax · Solo Lectura)
                     </div>
                   </div>
 
@@ -1319,16 +1367,16 @@ function AdminDashboardContent() {
                       {orders.length}
                     </div>
                     <div style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: '700' }}>
-                      📦 Órdenes en "orders"
+                      📦 Órdenes Multicanal
                     </div>
                   </div>
 
                   <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '12px' }}>
                     <div style={{ fontSize: '1.4rem', fontWeight: '800', color: '#7c3aed' }}>
-                      100%
+                      100% ACID
                     </div>
                     <div style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: '700' }}>
-                      🔒 Integridad Referencial
+                      🔒 Integridad Referencial SQLite
                     </div>
                   </div>
                 </div>

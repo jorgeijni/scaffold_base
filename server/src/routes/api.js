@@ -1,9 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
-const dns = require('dns').promises;
 const os = require('os');
-const net = require('net');
 
 // Health Check Endpoint (For Dokploy Health Checks)
 router.get('/health', (req, res) => {
@@ -18,60 +16,394 @@ router.get('/health', (req, res) => {
   });
 });
 
-// List products
-router.get('/products', async (req, res) => {
+// Ping DB Latency
+router.get('/db/ping', (req, res) => {
   try {
-    const products = await db.getProducts();
-    res.json({
-      success: true,
-      count: products.length,
-      data: products
-    });
+    const ping = db.pingDb();
+    res.json({ success: true, data: ping });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// Add new product
-router.post('/products', async (req, res) => {
+// ==========================================
+// 1. PRODUCTOS (Mantenible)
+// ==========================================
+router.get('/products', (req, res) => {
   try {
-    const { name, category, price, stock, image, description } = req.body;
+    const products = db.getProducts();
+    res.json({ success: true, count: products.length, data: products });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.get('/products/:id', (req, res) => {
+  try {
+    const product = db.getProductById(req.params.id);
+    if (!product) return res.status(404).json({ success: false, error: 'Producto no encontrado' });
+    res.json({ success: true, data: product });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.post('/products', (req, res) => {
+  try {
+    const { name, price } = req.body;
     if (!name || price === undefined) {
       return res.status(400).json({ success: false, error: 'Nombre y precio son requeridos.' });
     }
-    const product = await db.addProduct({ name, category, price, stock, image, description });
-    res.status(201).json({ success: true, message: 'Producto creado exitosamente', data: product });
+    const product = db.addProduct(req.body);
+    res.status(201).json({ success: true, message: 'Producto creado exitosamente en SQLite', data: product });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// Toggle product availability
-router.patch('/products/:id/toggle', async (req, res) => {
+router.put('/products/:id', (req, res) => {
   try {
-    const { id } = req.params;
-    const updated = await db.toggleProductAvailability(id);
-    if (!updated) {
-      return res.status(404).json({ success: false, error: 'Producto no encontrado' });
-    }
+    const updated = db.updateProduct(req.params.id, req.body);
+    if (!updated) return res.status(404).json({ success: false, error: 'Producto no encontrado' });
+    res.json({ success: true, message: 'Producto actualizado exitosamente', data: updated });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.patch('/products/:id/toggle', (req, res) => {
+  try {
+    const updated = db.toggleProductAvailability(req.params.id);
+    if (!updated) return res.status(404).json({ success: false, error: 'Producto no encontrado' });
     res.json({ success: true, message: 'Disponibilidad actualizada', data: updated });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// Delete product
-router.delete('/products/:id', async (req, res) => {
+router.delete('/products/:id', (req, res) => {
   try {
-    const { id } = req.params;
-    await db.deleteProduct(id);
-    res.json({ success: true, message: `Producto ${id} eliminado.` });
+    const deleted = db.deleteProduct(req.params.id);
+    if (!deleted) return res.status(404).json({ success: false, error: 'Producto no encontrado' });
+    res.json({ success: true, message: `Producto ${req.params.id} eliminado.` });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// Consumer / Customer Metrics according to consumption
+router.post('/reset', (req, res) => {
+  try {
+    const products = db.resetProducts();
+    res.json({ success: true, message: 'Datos de catálogo restablecidos en SQLite.', count: products.length });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ==========================================
+// 2. CATEGORÍAS DE PRODUCTOS (Mantenible)
+// ==========================================
+router.get('/categories', (req, res) => {
+  try {
+    const categories = db.getProductCategories();
+    res.json({ success: true, count: categories.length, data: categories });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.get('/categories/:id', (req, res) => {
+  try {
+    const category = db.getProductCategoryById(req.params.id);
+    if (!category) return res.status(404).json({ success: false, error: 'Categoría no encontrada' });
+    res.json({ success: true, data: category });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.post('/categories', (req, res) => {
+  try {
+    const { name } = req.body;
+    if (!name) return res.status(400).json({ success: false, error: 'El nombre de categoría es obligatorio.' });
+    const category = db.addProductCategory(req.body);
+    res.status(201).json({ success: true, message: 'Categoría creada exitosamente', data: category });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.put('/categories/:id', (req, res) => {
+  try {
+    const updated = db.updateProductCategory(req.params.id, req.body);
+    if (!updated) return res.status(404).json({ success: false, error: 'Categoría no encontrada' });
+    res.json({ success: true, message: 'Categoría actualizada exitosamente', data: updated });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.delete('/categories/:id', (req, res) => {
+  try {
+    const deleted = db.deleteProductCategory(req.params.id);
+    if (!deleted) return res.status(404).json({ success: false, error: 'Categoría no encontrada' });
+    res.json({ success: true, message: 'Categoría eliminada' });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ==========================================
+// 3. LISTAS DE PRECIOS & VERSIONES (Mantenible)
+// ==========================================
+router.get('/pricelists', (req, res) => {
+  try {
+    const lists = db.getPriceLists();
+    res.json({ success: true, count: lists.length, data: lists });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.get('/pricelists/:id', (req, res) => {
+  try {
+    const list = db.getPriceListById(req.params.id);
+    if (!list) return res.status(404).json({ success: false, error: 'Lista de precios no encontrada' });
+    res.json({ success: true, data: list });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.post('/pricelists', (req, res) => {
+  try {
+    const { name } = req.body;
+    if (!name) return res.status(400).json({ success: false, error: 'El nombre de lista es obligatorio.' });
+    const list = db.addPriceList(req.body);
+    res.status(201).json({ success: true, message: 'Lista de precios creada', data: list });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.put('/pricelists/:id', (req, res) => {
+  try {
+    const updated = db.updatePriceList(req.params.id, req.body);
+    if (!updated) return res.status(404).json({ success: false, error: 'Lista de precios no encontrada' });
+    res.json({ success: true, message: 'Lista de precios actualizada', data: updated });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.delete('/pricelists/:id', (req, res) => {
+  try {
+    const deleted = db.deletePriceList(req.params.id);
+    if (!deleted) return res.status(404).json({ success: false, error: 'Lista de precios no encontrada' });
+    res.json({ success: true, message: 'Lista de precios eliminada' });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.get('/pricelists/:id/versions', (req, res) => {
+  try {
+    const versions = db.getPriceListVersions(req.params.id);
+    res.json({ success: true, count: versions.length, data: versions });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.post('/pricelists/:id/versions', (req, res) => {
+  try {
+    const { name, valid_from } = req.body;
+    if (!name) return res.status(400).json({ success: false, error: 'El nombre de versión es obligatorio.' });
+    const version = db.addPriceListVersion({
+      price_list_id: req.params.id,
+      name,
+      valid_from
+    });
+    res.status(201).json({ success: true, message: 'Versión de lista creada', data: version });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.get('/pricelists/versions/:versionId/prices', (req, res) => {
+  try {
+    const prices = db.getVersionPrices(req.params.versionId);
+    res.json({ success: true, count: prices.length, data: prices });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.post('/pricelists/versions/:versionId/prices', (req, res) => {
+  try {
+    const { product_id, price_std, price_list, price_limit } = req.body;
+    if (!product_id || price_std === undefined) {
+      return res.status(400).json({ success: false, error: 'product_id y price_std son requeridos.' });
+    }
+    const price = db.setProductPrice(req.params.versionId, product_id, {
+      price_std,
+      price_list: price_list ?? price_std,
+      price_limit: price_limit ?? price_std * 0.9
+    });
+    res.json({ success: true, message: 'Precio de producto actualizado en la versión', data: price });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ==========================================
+// 4. CATEGORÍAS DE CLIENTES / BP_GROUPS (Mantenible)
+// ==========================================
+router.get('/customer-categories', (req, res) => {
+  try {
+    const categories = db.getCustomerCategories();
+    res.json({ success: true, count: categories.length, data: categories });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.get('/customer-categories/:id', (req, res) => {
+  try {
+    const cat = db.getCustomerCategoryById(req.params.id);
+    if (!cat) return res.status(404).json({ success: false, error: 'Categoría de cliente no encontrada' });
+    res.json({ success: true, data: cat });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.post('/customer-categories', (req, res) => {
+  try {
+    const { name } = req.body;
+    if (!name) return res.status(400).json({ success: false, error: 'El nombre de grupo de cliente es obligatorio.' });
+    const cat = db.addCustomerCategory(req.body);
+    res.status(201).json({ success: true, message: 'Grupo de clientes creado', data: cat });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.put('/customer-categories/:id', (req, res) => {
+  try {
+    const updated = db.updateCustomerCategory(req.params.id, req.body);
+    if (!updated) return res.status(404).json({ success: false, error: 'Categoría de cliente no encontrada' });
+    res.json({ success: true, message: 'Grupo de clientes actualizado', data: updated });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.delete('/customer-categories/:id', (req, res) => {
+  try {
+    const deleted = db.deleteCustomerCategory(req.params.id);
+    if (!deleted) return res.status(404).json({ success: false, error: 'Categoría de cliente no encontrada' });
+    res.json({ success: true, message: 'Grupo de clientes eliminado' });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ==========================================
+// 5. CLIENTES / SOCIOS DE NEGOCIO (Mantenible)
+// ==========================================
+router.get('/customers', (req, res) => {
+  try {
+    const customers = db.getCustomers();
+    res.json({ success: true, count: customers.length, data: customers });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.get('/customers/:id', (req, res) => {
+  try {
+    const customer = db.getCustomerById(req.params.id);
+    if (!customer) return res.status(404).json({ success: false, error: 'Cliente no encontrado' });
+    res.json({ success: true, data: customer });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.post('/customers', (req, res) => {
+  try {
+    const { name } = req.body;
+    if (!name) return res.status(400).json({ success: false, error: 'El nombre del cliente es obligatorio.' });
+    const customer = db.addCustomer(req.body);
+    res.status(201).json({ success: true, message: 'Cliente registrado exitosamente', data: customer });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.put('/customers/:id', (req, res) => {
+  try {
+    const updated = db.updateCustomer(req.params.id, req.body);
+    if (!updated) return res.status(404).json({ success: false, error: 'Cliente no encontrado' });
+    res.json({ success: true, message: 'Cliente actualizado exitosamente', data: updated });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.delete('/customers/:id', (req, res) => {
+  try {
+    const deleted = db.deleteCustomer(req.params.id);
+    if (!deleted) return res.status(404).json({ success: false, error: 'Cliente no encontrado' });
+    res.json({ success: true, message: 'Cliente eliminado' });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ==========================================
+// 6. IMPUESTOS (SOLO LECTURA EN APLICACIÓN)
+// ==========================================
+router.get('/taxes', (req, res) => {
+  try {
+    const taxes = db.getTaxes();
+    res.json({
+      success: true,
+      readonly: true,
+      message: 'Catálogo oficial de impuestos de solo lectura (mantenido exclusivamente desde ERP)',
+      count: taxes.length,
+      data: taxes
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.get('/taxes/:id', (req, res) => {
+  try {
+    const tax = db.getTaxById(req.params.id);
+    if (!tax) return res.status(404).json({ success: false, error: 'Impuesto no encontrado' });
+    res.json({ success: true, readonly: true, data: tax });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Rechazo explícito a mutaciones manuales de impuestos
+router.all(['/taxes', '/taxes/:id'], (req, res, next) => {
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method.toUpperCase())) {
+    return res.status(405).json({
+      success: false,
+      error: 'Operación no permitida: El catálogo de impuestos es de SOLO LECTURA en esta aplicación y se sincroniza exclusivamente desde iDempiere ERP.'
+    });
+  }
+  next();
+});
+
+// ==========================================
+// 7. CONSUMER METRICS & ORDERS
+// ==========================================
 router.get('/metrics/customers', (req, res) => {
   try {
     const metrics = db.getConsumerMetrics();
@@ -81,7 +413,6 @@ router.get('/metrics/customers', (req, res) => {
   }
 });
 
-// Orders (PWA Preventa, E-commerce & Admin tracking)
 router.get('/orders', (req, res) => {
   try {
     const origin = req.query.origin || 'all';
@@ -95,7 +426,7 @@ router.get('/orders', (req, res) => {
 router.post('/orders', (req, res) => {
   try {
     const newOrder = db.createOrder(req.body);
-    res.status(201).json({ success: true, message: 'Orden creada con éxito', data: newOrder });
+    res.status(201).json({ success: true, message: 'Orden creada con éxito en SQLite', data: newOrder });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -104,17 +435,10 @@ router.post('/orders', (req, res) => {
 router.patch('/orders/:id/status', (req, res) => {
   try {
     const { id } = req.params;
-    const { status, approvedBy } = req.body;
-    if (!status) {
-      return res.status(400).json({ success: false, error: 'El campo "status" es obligatorio.' });
-    }
-    const updated = db.updateOrder(id, {
-      status,
-      approvedBy: approvedBy || null
-    });
-    if (!updated) {
-      return res.status(404).json({ success: false, error: `Orden ${id} no encontrada.` });
-    }
+    const { status } = req.body;
+    if (!status) return res.status(400).json({ success: false, error: 'El campo "status" es obligatorio.' });
+    const updated = db.updateOrder(id, { status });
+    if (!updated) return res.status(404).json({ success: false, error: `Orden ${id} no encontrada.` });
     res.json({ success: true, message: 'Estado de orden actualizado', data: updated });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -218,76 +542,12 @@ router.post('/orders/:id/sync-erp', async (req, res) => {
   }
 });
 
-// Reset initial products
-router.post('/reset', async (req, res) => {
-  try {
-    await db.resetProducts();
-    res.json({ success: true, message: 'Datos demo de Hamburger Rapid restablecidos.' });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// Helper for socket testing
-function checkTcpPort(host, port = 3306, timeout = 300) {
-  return new Promise((resolve) => {
-    const socket = new net.Socket();
-    socket.setTimeout(timeout);
-    socket.once('connect', () => {
-      socket.destroy();
-      resolve({ host, port, open: true });
-    });
-    socket.once('timeout', () => {
-      socket.destroy();
-      resolve({ host, port, open: false, reason: 'timeout' });
-    });
-    socket.once('error', (err) => {
-      resolve({ host, port, open: false, reason: err.code || err.message });
-    });
-    socket.connect(port, host);
-  });
-}
-
-// Diagnostic network endpoint
-router.get('/debug-network', async (req, res) => {
-  const hostsToTest = [
-    process.env.DB_HOST,
-    '172.18.0.1',
-    '172.17.0.1',
-    '127.0.0.1'
-  ].filter(Boolean);
-
-  const dnsResults = {};
-  for (const host of hostsToTest) {
-    try {
-      const lookup = await dns.lookup(host);
-      dnsResults[host] = { ok: true, ip: lookup.address };
-    } catch (err) {
-      dnsResults[host] = { ok: false, error: err.message };
-    }
-  }
-
-  const candidateTargets = ['172.18.0.1', '172.17.0.1'];
-  for (let i = 2; i <= 30; i++) {
-    candidateTargets.push(`172.18.0.${i}`);
-  }
-
-  const portScans = await Promise.all(candidateTargets.map(ip => checkTcpPort(ip, 3306, 250)));
-  const open3306 = portScans.filter(p => p.open);
-
+// Diagnóstico de Infraestructura y Base de Datos
+router.get('/debug-network', (req, res) => {
   res.json({
     hostname: os.hostname(),
-    interfaces: os.networkInterfaces(),
-    environment: {
-      DB_HOST: process.env.DB_HOST,
-      DB_PORT: process.env.DB_PORT,
-      DB_USER: process.env.DB_USER,
-      DB_NAME: process.env.DB_NAME,
-      HAS_PASSWORD: !!process.env.DB_PASSWORD,
-      HAS_DATABASE_URL: !!process.env.DATABASE_URL
-    },
-    dns_tests: dnsResults,
-    open_mysql_ports_found: open3306,
+    platform: os.platform(),
+    uptime: process.uptime(),
     db_status: db.getDbStatus()
   });
 });

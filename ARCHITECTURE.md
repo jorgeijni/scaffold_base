@@ -1,6 +1,6 @@
 # ARCHITECTURE.md — Arquitectura del Sistema Hamburger Rapid
 
-Documentación técnica oficial de la arquitectura del monorepo **Hamburger Rapid (`nextcollege-masterclass-scaffold`)**, diseñada como plataforma omnicanal de 3 capas conectada a un backend unificado en Node.js y pasarela REST hacia iDempiere ERP.
+Documentación técnica oficial de la arquitectura del monorepo **Hamburger Rapid (`nextcollege-masterclass-scaffold`)**, diseñada como plataforma omnicanal de 3 capas conectada a un backend unificado en Node.js, base de datos relacional SQLite 3 y pasarela REST hacia iDempiere ERP.
 
 > **Regla de mantenimiento obligatorio:** Este archivo [`ARCHITECTURE.md`](ARCHITECTURE.md) debe mantenerse **siempre actualizado junto con [`AGENTS.md`](AGENTS.md)** conforme avance el proyecto (nuevas funcionalidades, componentes, rutas, endpoints, esquemas, variables de entorno o flujos de despliegue). Ninguna tarea se da por cerrada sin reflejar los cambios en ambos documentos `.md`.
 
@@ -18,29 +18,28 @@ flowchart LR
 
   subgraph Backend["Servidor Unificado Express (server/src/app.js · Puerto 3000)"]
     STATIC["Static File Server\n/, /app, /admin"]
-    API["API Comercial\n/api/* (routes/api.js)"]
-    GW["Gateway & Proxy ERP\n/api/idempiere/* (routes/idempiere.js)"]
+    API["API Comercial & Catálogos\n/api/* (routes/api.js)"]
+    GW["Gateway & Sync ERP\n/api/idempiere/* (routes/idempiere.js)"]
     SVC["idempiereService.js"]
   end
 
-  subgraph Data["Capa de Datos"]
-    MYSQL["MySQL (mysql2 pool)"]
-    MEM["Fallback In-Memory\nProductos, Órdenes, Métricas"]
+  subgraph Data["Capa de Datos Persistente"]
+    SQLITE["Motor Relacional SQLite 3 (node:sqlite)\nserver/data/database.sqlite · WAL Mode\n6 Catálogos Maestros + Órdenes + Historial"]
   end
 
   subgraph External["Sistema Externo Corporativo"]
-    ERP["iDempiere REST API v1\n/api/v1/auth/tokens, /models/*"]
+    ERP["iDempiere REST API v1\n/api/v1/auth/tokens, /models/*\nM_Product_Category, M_Product, M_PriceList,\nC_BP_Group, C_BPartner, C_Tax"]
   end
 
   E -->|Redirige pedido| P
   P -->|GET /products, POST /orders| API
-  A -->|Gestión y bandeja| API
-  A -->|Auth y Proxy CORS| GW
+  A -->|CRUD Catálogos y Bandeja| API
+  A -->|Sincronización y Auth| GW
   GW --> SVC
   SVC -->|HTTP/REST JSON| ERP
   API -->|Sync C_Order| ERP
-  API --> MYSQL
-  API -.->|Degradación automática| MEM
+  API <-->|Lectura / Escritura ACID| SQLITE
+  GW <-->|Upsert Catálogos ERP| SQLITE
   STATIC --> Clientes
 ```
 
@@ -51,8 +50,8 @@ flowchart LR
 ```text
 scaffold_base/
 ├── AGENTS.md                           # Reglas y convenciones vivas para desarrollo/agentes
-├── ARCHITECTURE.md                     # Este documento técnico
-├── Dockerfile                          # Build multi-etapa (4 stages) sobre node:20-alpine
+├── ARCHITECTURE.md                     # Este documento técnico oficial
+├── Dockerfile                          # Build multi-etapa (4 stages) sobre node:22-alpine + volumen SQLite
 ├── package.json                        # Scripts raíz del monorepo
 ├── README.md                           # Guía general de despliegue e instalación
 │
@@ -90,20 +89,23 @@ scaffold_base/
 │               ├── AuthGuard.jsx       # Guardia de ruta autenticada (Bearer token)
 │               ├── LoginPage.jsx       # Login público white-label
 │               ├── TwoStepContextForm.jsx # Selector multitenant dinámico (Paso 2)
-│               ├── AdminSidebar.jsx    # Barra lateral del panel de control
+│               ├── AdminSidebar.jsx    # Barra lateral del panel con accesos a catálogos
+│               ├── MasterCatalogsView.jsx # Módulo de los 6 catálogos maestros y sincronización ERP
 │               ├── OrdersInbox.jsx     # Bandeja 3-capas (PWA vs E-commerce + ERP sync)
 │               ├── IdempiereErpView.jsx # Consola técnica REST v1 + diagnóstico Ping
 │               ├── ErpStatusModal.jsx  # Modal Inspector de Sesión y JWT Bearer
 │               └── ProfileErpSettingsView.jsx # Configuración segura de servidor, modo login y catálogo
 │
-└── server/                             # Backend Node.js / Express + Artefactos servidos
-    ├── package.json                    # express ^4.19.2, cors ^2.8.5, mysql2 ^3.10.1
+└── server/                             # Backend Node.js / Express + SQLite + Artefactos servidos
+    ├── package.json                    # express ^4.19.2, cors ^2.8.5 (sin mysql2)
+    ├── data/                           # Directorio persistente SQLite (declarado como VOLUME en Docker)
+    │   └── database.sqlite             # Archivo relacional de producción (WAL mode)
     └── src/
         ├── app.js                      # Servidor HTTP unificado, CORS, rutas y static SPA
-        ├── db.js                       # Pool MySQL + fallback In-Memory (productos/órdenes/clientes)
+        ├── db.js                       # Motor SQLite 3 (node:sqlite) + 6 catálogos + transacciones
         ├── routes/
-        │   ├── api.js                  # Endpoints comerciales, órdenes, salud y diagnóstico
-        │   └── idempiere.js            # Proxy CORS, gateway auth REST v1 y sync catálogo
+        │   ├── api.js                  # Endpoints CRUD para los 6 catálogos, órdenes y salud
+        │   └── idempiere.js            # Proxy CORS, auth REST v1 y sincronización de modelos ERP
         └── services/
             └── idempiereService.js     # Cliente backend para iDempiere REST API v1
 ```
@@ -115,97 +117,118 @@ scaffold_base/
 ### 3.1 Capa 1 — Portal E-commerce (`apps/ecommerce`)
 - **Framework**: Astro `^4.16.18` compilado estáticamente (`output: 'static'`).
 - **Funcionalidad**: Landing Page comercial de **Hamburger Rapid** montada en `/` por Express.
-- **Catálogo**: Renderiza 10 variantes de hamburguesas (incluyendo *Rey de las Burgers*, *Burger Real Clásica*, *Burger Real Doble* y *Burger Doble Especial*) con precio, calorías, proteína, badge de nivel de especialidad, filtro por categoría (`all`, `especiales`, `clasicas`, `pollo`) y modal interactivo `#detailModal` activado por el botón `Ver Detalles`.
-- **Conversión**: los botones de pedido redirigen directamente hacia `/app`.
+- **Catálogo**: Renderiza 10 variantes de hamburguesas con precios, badges, filtros por categoría y modal interactivo `#detailModal`.
+- **Conversión**: Los pedidos y compras redirigen hacia `/app`.
 
 ### 3.2 Capa 2 — PWA de Pedidos (`apps/pwa`)
 - **Framework**: React `18.3.1` + Vite `5.3.1` (`base: '/app/'`).
-- **Capacidades PWA**:
-  - `manifest.json` configurado en `scope: '/app/'`, orientación vertical y `display: standalone`.
-  - `sw.js` (`CACHE_NAME = 'nextcollege-pwa-v2'`): estrategia **Network-First** para navegación HTML (evita servir vistas obsoletas) y **Cache-First** para assets estáticos (`sw` excluye `/api/` para mantener integridad transaccional).
-- **Navegación por 5 Pestañas**:
-  1. `home`: hero promocional, buscador en vivo, selector de categorías dinámico y combos populares.
-  2. `menu`: catálogo completo filtrable por categoría y favoritos.
-  3. `ordenes`: historial y stepper en vivo de progreso (`Recibido` → `Cocina` → `En camino` → `Entregado`).
-  4. `ofertas`: cupones comerciales (`RAPID2X1`, `COMBODOBLE`, `SPICY30`, `DELIVERYFREE`).
-  5. `perfil`: datos del usuario, recompensas, dirección y enlaces al portal `/` y panel `/admin`.
-- **Resiliencia Offline**: sincroniza con `GET /api/products` y `GET /api/orders` al montar; ante desconexión opera con `DEFAULT_PRODUCTS` y registra órdenes localmente, o envía `channel: 'PWA Mobile'` vía `POST /api/orders` cuando hay red.
+- **Capacidades PWA**: `manifest.json` standalone, `sw.js` `nextcollege-pwa-v2` con estrategia Network-First para vistas y sincronización periódica con `GET /api/products` y `GET /api/orders`.
+- **Navegación por 5 Pestañas**: `home`, `menu`, `ordenes`, `ofertas`, `perfil`.
 
 ### 3.3 Capa 3 — Panel de Administración (`apps/admin`)
 
-#### Módulo de Autenticación Desacoplado y White-Label
-- **[`AuthService.js`](apps/admin/src/services/AuthService.js)**: librería pura en JavaScript (sin dependencia de React) diseñada para ser reutilizable también desde la PWA.
-  - **Almacenamiento en navegador (`localStorage`)**:
-    - `idempiere_auth_session`: `{ token, refreshToken, userId, userName, clientId, roleId, orgId, organizationId, warehouseId, language, clientName, roleName, orgName, warehouseName, authMode, endpoint, baseUrl, corsProxyEnabled, corsProxyMode, viaProxy, latencyMs, claims, expiresAt, savedAt }`.
-    - `idempiere_connection_config`: `{ baseUrl, corsProxyEnabled, corsProxyMode, corsProxyCustomUrl, enableMultiTenantLogin, defaultParameters }`.
-  - **Soporte Dual de Login**:
-    - **1 Paso (`loginDirect`)**: `POST /api/v1/auth/tokens` con bloque `parameters: { clientId, roleId, organizationId, warehouseId, language }`.
-    - **2 Pasos (`loginStepOne` + `loginStepTwo`)**: autenticación inicial + carga en cascada (`/roles`, `/organizations`, `/warehouses`, `/language`) + `PUT /api/v1/auth/tokens` con token temporal en cabecera `Authorization: Bearer`.
-  - **Estrategias CORS (`resolveUrl`)**: conexión directa HTTPS, Proxy Local del backend (`/api/idempiere/proxy?url=...`), `https://corsproxy.io/?` o URL personalizada.
-- **Separación de Responsabilidades (Seguridad Pública vs Control Interno)**:
-  - **`LoginPage.jsx` + `AuthGuard.jsx` + `TwoStepContextForm.jsx`**: interfaz corporativa limpia white-label; oculta URL del servidor, Proxy CORS, IDs numéricos por defecto, modo multi-tenant y toda mención a iDempiere. Los errores de autenticación devolviendo códigos `400/401/403/404` se traducen a mensajes neutros comprensibles para el usuario final.
-  - **`ProfileErpSettingsView.jsx`**: consola interna solo accesible tras autenticar sesión; administra la URL corporativa, proxy CORS, activación de modo asistido 2 pasos (`enableMultiTenantLogin`), valores predeterminados para 1 paso (`defaultParameters`, incluyendo idioma `es_PE`) y aprovisionamiento de catálogo.
+#### Módulo de Catálogos Maestros ERP ([`MasterCatalogsView.jsx`](apps/admin/src/components/MasterCatalogsView.jsx))
+Navegación integrada por pestañas con soporte completo para sincronización con iDempiere ERP:
+1. 🏷️ **Categorías de Productos** (`M_Product_Category`):
+   - Mantenible: Creación, edición, eliminación lógica/física, listado con conteo de productos asociados.
+   - Sincronización ERP: `POST /api/idempiere/sync/categories`.
+2. 🍔 **Catálogo de Productos** (`M_Product`):
+   - Mantenible: Creación, edición, pausa/activación de disponibilidad, control de stock y precio.
+   - Sincronización ERP: `POST /api/idempiere/sync/products`.
+3. 💲 **Catálogo de Precios (Listas y Versiones)** (`M_PriceList` / `M_PriceList_Version` / `M_ProductPrice`):
+   - Mantenible: Creación y edición de listas de precios (marca de tarifa base, moneda `PEN`/`USD`), creación de versiones de lista vigentes por fecha y matriz editable de precios estándar y límites por producto.
+   - Sincronización ERP: `POST /api/idempiere/sync/pricelists`.
+4. 👥 **Categorías de Clientes / Grupos de Terceros** (`C_BP_Group`):
+   - Mantenible: Grupos comerciales (*VIP Gold*, *Platino*, *Frecuentes*, *Ocasional*, *Corporativo*), porcentaje de descuento oficial asignado y estado.
+   - Sincronización ERP: `POST /api/idempiere/sync/customer-categories`.
+5. 👤 **Catálogo de Clientes / Socios de Negocio** (`C_BPartner`):
+   - Mantenible: Registro y edición de clientes (DNI/RUC, nombre, categoría, teléfono, correo, dirección de entrega), histórico de pedidos y consumo acumulado.
+   - Sincronización ERP: `POST /api/idempiere/sync/customers`.
+6. 🏛️ **Catálogo de Impuestos** (`C_Tax`):
+   - **SOLO LECTURA**: Bloqueado contra modificaciones manuales en la interfaz para garantizar integridad tributaria.
+   - Visualización de tasas oficiales (ej. IGV 18%, Recargo al Servicio 10%, Exonerado 0%, ICBPER) y botón de consulta/sincronización desde el ERP (`POST /api/idempiere/sync/taxes`).
+- **Botón Global de Sincronización Total**: Ejecuta `POST /api/idempiere/sync/all` actualizando los 6 catálogos en una sola operación con auditoría en `sync_history`.
 
 #### Secciones del Control Dashboard
-1. **`Resumen General`** (`resumen`): 4 tarjetas KPI ejecutivas + bandeja central de pedidos integrada.
-2. **`Catálogo Hamburguesas`** (`burgers`): listado, filtros por categoría, búsqueda, alta (`POST /api/products`), activación/pausa (`PATCH /api/products/:id/toggle`) y eliminación (`DELETE /api/products/:id`).
-3. **`Bandeja Pedidos`** (`orders` — [`OrdersInbox.jsx`](apps/admin/src/components/OrdersInbox.jsx)): filtrado por canal (*PWA Preventa / Vendedores* vs *E-commerce*), cambio de estado (`PATCH /api/orders/:id/status`) y coordinación de orden de venta `C_Order` hacia el ERP (`POST /api/orders/:id/sync-erp`).
-4. **`Métricas de Clientes`** (`customers`): KPIs de consumo, segmentación VIP / Frecuente / Ocasional y ranking de clientes (`GET /api/metrics/customers`).
-5. **`Estado Base de Datos`** (`database`): modo activo (`mysql` vs `in-memory`), métricas de pool, prueba de latencia (`/api/health`) y diagnóstico de red (`/api/debug-network`).
-6. **`iDempiere ERP`** (`idempiere` — [`IdempiereErpView.jsx`](apps/admin/src/components/IdempiereErpView.jsx) & [`ErpStatusModal.jsx`](apps/admin/src/components/ErpStatusModal.jsx)): auditoría visual de directivas REST v1 (`POST /api/v1/auth/tokens`, objeto `parameters`, campo `organizationId`), payload sanitizado transmitido, diagnóstico Ping y visor completo del Bearer Token / JWT.
-7. **`Perfil & Conexión ERP`** (`profile` — [`ProfileErpSettingsView.jsx`](apps/admin/src/components/ProfileErpSettingsView.jsx)): perfil de sesión activa, configuración segura de servidor/CORS, modo de autenticación público, parámetros predeterminados y aprovisionamiento/sincronización de catálogo.
+1. **`Resumen General`** (`resumen`): KPIs ejecutivos + bandeja central de pedidos integrada.
+2. **`Catálogos Maestros ERP`** (`catalogs` — [`MasterCatalogsView.jsx`](apps/admin/src/components/MasterCatalogsView.jsx)): Consola de los 6 catálogos descritos arriba.
+3. **`Catálogo Hamburguesas`** (`burgers`): Administración rápida de hamburguesas y recetas.
+4. **`Bandeja Pedidos`** (`orders` — [`OrdersInbox.jsx`](apps/admin/src/components/OrdersInbox.jsx)): Filtrado por canal (PWA vs E-commerce), estados operativos y sincronización `C_Order`.
+5. **`Métricas de Clientes`** (`customers`): Segmentación LTV (VIP, Platino, Regular).
+6. **`Base de Datos SQLite`** (`database`): Inspección de salud de SQLite 3, tamaño en disco, modo WAL, tiempo de respuesta en ms y conteo de entidades en las tablas maestras.
+7. **`iDempiere ERP`** (`idempiere` — [`IdempiereErpView.jsx`](apps/admin/src/components/IdempiereErpView.jsx)): Auditoría de protocolo REST v1, visor Bearer JWT y diagnóstico Ping.
+8. **`Perfil & Conexión ERP`** (`profile` — [`ProfileErpSettingsView.jsx`](apps/admin/src/components/ProfileErpSettingsView.jsx)): Perfil activo, configuración de proxy CORS y modo login (1 paso / 2 pasos).
 
 ---
 
-## 4. API Backend y Contratos de Datos (`server/`)
+## 4. API Backend y Base de Datos SQLite (`server/`)
 
-Montado en [`server/src/app.js`](server/src/app.js) bajo puerto `process.env.PORT || 3000`:
+### 4.1 Endpoints Comerciales y Catálogos (`/api`, `server/src/routes/api.js`)
+| Método | Ruta | Descripción | Mantenibilidad |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/api/health` | Estado del backend y métricas de SQLite | Lectura |
+| `GET` | `/api/db/ping` | Medición de latencia de consulta en SQLite | Lectura |
+| `GET/POST` | `/api/categories` | Listar y crear categorías de productos | **Mantenible** |
+| `GET/PUT/DELETE` | `/api/categories/:id` | Obtener, editar o eliminar categoría | **Mantenible** |
+| `GET/POST` | `/api/products` | Listar y crear productos en SQLite | **Mantenible** |
+| `GET/PUT/DELETE` | `/api/products/:id` | Obtener, actualizar o eliminar producto | **Mantenible** |
+| `PATCH` | `/api/products/:id/toggle` | Alternar disponibilidad (`isAvailable`) | **Mantenible** |
+| `POST` | `/api/reset` | Restaura catálogo de productos inicial | Sistema |
+| `GET/POST` | `/api/pricelists` | Listar y crear listas de precios | **Mantenible** |
+| `GET/PUT/DELETE` | `/api/pricelists/:id` | Obtener, actualizar o eliminar lista de precios | **Mantenible** |
+| `GET/POST` | `/api/pricelists/:id/versions` | Listar y crear versiones de listas de precios | **Mantenible** |
+| `GET/POST` | `/api/pricelists/versions/:vId/prices` | Consultar y ajustar precios de productos por versión | **Mantenible** |
+| `GET/POST` | `/api/customer-categories` | Listar y crear grupos de clientes | **Mantenible** |
+| `GET/PUT/DELETE` | `/api/customer-categories/:id` | Obtener, actualizar o eliminar grupo de clientes | **Mantenible** |
+| `GET/POST` | `/api/customers` | Listar y crear clientes / terceros | **Mantenible** |
+| `GET/PUT/DELETE` | `/api/customers/:id` | Obtener, actualizar o eliminar cliente | **Mantenible** |
+| `GET` | `/api/taxes` | Listar impuestos oficiales activos | **Solo Lectura** |
+| `GET` | `/api/taxes/:id` | Detalle de impuesto (mutaciones retornan `405`) | **Solo Lectura** |
+| `GET` | `/api/orders` | Listado de órdenes multicanal | Lectura |
+| `POST` | `/api/orders` | Registro de nueva orden (PWA o E-commerce) | Transaccional |
+| `PATCH` | `/api/orders/:id/status` | Actualizar estado de orden | Transaccional |
+| `POST` | `/api/orders/:id/sync-erp` | Enviar orden `C_Order` al ERP con token Bearer | Integración |
 
-### 4.1 Endpoints Comerciales (`/api`, `server/src/routes/api.js`)
-| Método | Ruta | Descripción |
+### 4.2 Endpoints de Sincronización ERP (`/api/idempiere`, `server/src/routes/idempiere.js`)
+| Método | Ruta | Catálogo / Operación |
 | :--- | :--- | :--- |
-| `GET` | `/api/health` | Estado del servidor, modo de base de datos y conteos |
-| `GET` | `/api/products` | Lista completa del catálogo (MySQL o In-Memory) |
-| `POST` | `/api/products` | Crea una nueva variante en el catálogo |
-| `PATCH` | `/api/products/:id/toggle` | Alterna disponibilidad (`isAvailable`) |
-| `DELETE` | `/api/products/:id` | Elimina un producto del catálogo |
-| `POST` | `/api/reset` | Restaura las 10 hamburguesas iniciales |
-| `GET` | `/api/metrics/customers` | Métricas de consumo agregadas y top clientes |
-| `GET` | `/api/orders` | Lista órdenes (soporta `?origin=pwa\|ecommerce`) |
-| `POST` | `/api/orders` | Registra nueva orden desde PWA o E-commerce |
-| `PATCH` | `/api/orders/:id/status` | Actualiza estado operativo de una orden |
-| `POST` | `/api/orders/:id/sync-erp` | Requiere `Authorization: Bearer` y envía `C_Order` al ERP |
-| `GET` | `/api/debug-network` | Diagnóstico DNS y escaneo de puertos 3306 en red Docker |
-
-### 4.2 Endpoints Gateway & Catálogo (`/api/idempiere`, `server/src/routes/idempiere.js`)
-| Método | Ruta | Descripción |
-| :--- | :--- | :--- |
-| `ALL` | `/api/idempiere/proxy?url=...` | Proxy CORS restringido a rutas `/api/v1/` con timeout 12s |
-| `POST` | `/api/idempiere/authenticate` | Paso 1 server-side |
-| `POST` | `/api/idempiere/login` | Login 1 paso o confirmación Paso 2 server-side |
+| `POST` | `/api/idempiere/sync/categories` | Sincroniza categorías desde `M_Product_Category` hacia SQLite |
+| `POST` | `/api/idempiere/sync/products` | Sincroniza productos desde `M_Product` hacia SQLite |
+| `POST` | `/api/idempiere/sync/pricelists` | Sincroniza listas de precios desde `M_PriceList` hacia SQLite |
+| `POST` | `/api/idempiere/sync/customer-categories` | Sincroniza grupos de terceros desde `C_BP_Group` hacia SQLite |
+| `POST` | `/api/idempiere/sync/customers` | Sincroniza clientes desde `C_BPartner` hacia SQLite |
+| `POST` | `/api/idempiere/sync/taxes` | Sincroniza impuestos oficiales desde `C_Tax` hacia SQLite |
+| `POST` | `/api/idempiere/sync/all` | Sincronización integral de los 6 catálogos maestros |
+| `GET` | `/api/idempiere/sync/history` | Historial de sincronizaciones y auditoría de eventos |
+| `POST` | `/api/idempiere/authenticate` | Paso 1 autenticación server-side |
+| `POST` | `/api/idempiere/login` | Login directo o Paso 2 server-side |
 | `GET` | `/api/idempiere/status` | Ping HTTP de conectividad ERP |
-| `POST` | `/api/idempiere/verify` | Decodifica y verifica vigencia (`exp`) de token JWT |
-| `POST` | `/api/idempiere/logout` | Notifica cierre de sesión |
-| `POST` | `/api/idempiere/catalog/seed` | Mapea/verifica catálogo en ERP (`M_Product`) con token Bearer |
-| `POST` | `/api/idempiere/catalog/sync-sqlite` | Sincroniza IDs `M_Product_ID` y precios hacia datamart activo |
-| `GET` | `/api/idempiere/catalog/history` | Retorna historial reciente de aprovisionamiento y sincronización |
+| `ALL` | `/api/idempiere/proxy?url=...` | Proxy CORS seguro para peticiones iDempiere v1 |
 
-### 4.3 Esquema de Datos y Variables de Entorno (`server/src/db.js`)
-- **Variables de entorno soportadas**:
-  - `PORT` (por defecto `3000`), `NODE_ENV`
-  - `DATABASE_URL` o combinación `DB_HOST`, `DB_PORT` (`3306`), `DB_USER`, `DB_PASSWORD`, `DB_NAME`
-  - `IDEMPIERE_BASE_URL` (por defecto `https://test.idempiere.org:443`)
-- **Tabla MySQL `products`** creada automáticamente en `db.initDB()`:
-  - `id` (`INT AUTO_INCREMENT PK`), `name`, `category`, `price` (`DECIMAL(10,2)`), `stock`, `specialty`, `badgeColor`, `calories`, `image`, `description`, `isAvailable` (`BOOLEAN`), `created_at` (`TIMESTAMP`).
-- **Respaldo In-Memory**: cuando MySQL no está disponible al arranque, `db.js` mantiene las colecciones `inMemoryProducts` (10 hamburguesas), `inMemoryOrders` (órdenes multicanal de ejemplo con `originType` `pwa`/`ecommerce`) y `inMemoryCustomers` (7 clientes con consumo).
+### 4.3 Esquema Relacional SQLite 3 (`server/src/db.js`)
+El motor relacional utiliza `node:sqlite` nativo (sin compilaciones C++ externas) con almacenamiento en archivo:
+- **`product_categories`**: `id`, `idempiere_id`, `value` (UNIQUE), `name`, `description`, `is_active`, timestamps.
+- **`products`**: `id`, `idempiere_id`, `value` (UNIQUE), `name`, `category_id`, `category`, `price`, `stock`, `specialty`, `badgeColor`, `calories`, `image`, `description`, `isAvailable`, timestamps.
+- **`price_lists`**: `id`, `idempiere_id`, `value` (UNIQUE), `name`, `description`, `currency`, `is_active`, `is_default`, timestamps.
+- **`price_list_versions`**: `id`, `idempiere_id`, `price_list_id` (FK), `name`, `valid_from`, `is_active`, timestamps.
+- **`product_prices`**: `id`, `version_id` (FK), `product_id` (FK), `price_list`, `price_std`, `price_limit`, UNIQUE(`version_id`, `product_id`).
+- **`customer_categories`**: `id`, `idempiere_id`, `value` (UNIQUE), `name`, `description`, `discount_percent`, `is_default`, `is_active`, timestamps.
+- **`customers`**: `id`, `idempiere_id`, `value` (UNIQUE), `name`, `category_id` (FK), `category_name`, `tax_id`, `email`, `phone`, `address`, `avatar`, `tier`, `total_spent`, `orders_count`, `favorite_burger`, `is_active`, timestamps.
+- **`taxes`**: `id`, `idempiere_id`, `value` (UNIQUE), `name`, `rate`, `category_name`, `is_active`, `description`, timestamps.
+- **`orders`**: `id`, `customer_name`, `customer_id` (FK), `items_json`, `total`, `status`, `channel`, `origin_type`, `sales_rep`, `erp_sync_status`, `erp_document_no`, `erp_context_json`, `address`, `created_at`.
+- **`sync_history`**: `id`, `catalog_name`, `records_synced`, `status`, `source`, `details`, `created_at`.
+
+- **Variables de Entorno**:
+  - `PORT`: Puerto HTTP (por defecto `3000`).
+  - `SQLITE_DB_PATH`: Ruta al archivo SQLite (por defecto `server/data/database.sqlite`).
+  - `IDEMPIERE_BASE_URL`: URL del ERP iDempiere (por defecto `https://test.idempiere.org:443`).
 
 ---
 
 ## 5. Despliegue en Contenedor (`Dockerfile`)
 
-El [`Dockerfile`](Dockerfile) ejecuta una compilación aislada de **4 etapas** sobre `node:20-alpine`:
-1. **`builder-ecommerce`**: instala dependencias de `apps/ecommerce` y ejecuta `npm run build`.
-2. **`builder-pwa`**: instala dependencias de `apps/pwa` y ejecuta `npm run build`.
-3. **`builder-admin`**: instala dependencias de `apps/admin` y ejecuta `npm run build`.
-4. **`runner`**: instala dependencias de producción en `server/`, copia `server/` junto con las 3 salidas `dist/` hacia `./server/public/{ecommerce,pwa,admin}`, expone el puerto `3000` y arranca con `node server/src/app.js`.
-
+El [`Dockerfile`](Dockerfile) utiliza compilación aislada en **4 etapas** sobre `node:22-alpine` para aprovechar el motor `node:sqlite` sin dependencias externas:
+1. **`builder-ecommerce`**: Compilación estática de Astro 4 (`output: 'static'`).
+2. **`builder-pwa`**: Compilación de la PWA móvil con Vite (`base: '/app/'`).
+3. **`builder-admin`**: Compilación del panel de control administrativo (`base: '/admin/'`).
+4. **`runner`**: Runtime final Node.js 22 Alpine, instalación ligera del backend (sin `mysql2`), creación y declaración del volumen persistente `VOLUME ["/app/server/data"]`, copia de artefactos a `server/public/*` y comando de arranque `CMD ["node", "server/src/app.js"]`.

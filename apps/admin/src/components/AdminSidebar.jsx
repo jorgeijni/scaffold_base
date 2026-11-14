@@ -15,10 +15,11 @@ export default function AdminSidebar({
 
   const navItems = [
     { id: 'resumen', label: 'Resumen General', icon: '📊' },
+    { id: 'catalogs', label: 'Catálogos Maestros ERP', icon: '📚', badge: '6', badgeTone: 'success' },
     { id: 'burgers', label: 'Catálogo Hamburguesas', icon: '🍔', badge: burgersCount, badgeTone: 'neutral' },
     { id: 'orders', label: 'Bandeja Pedidos', icon: '📦', badge: ordersCount, badgeTone: 'neutral' },
     { id: 'customers', label: 'Métricas de Clientes', icon: '👥' },
-    { id: 'database', label: 'Estado Base de Datos', icon: '🗄️' },
+    { id: 'database', label: 'Base de Datos SQLite', icon: '🗄️', pill: 'SQLite' },
     { id: 'idempiere', label: 'iDempiere ERP', icon: '🏢', pill: 'Live' },
     { id: 'profile', label: 'Perfil & Conexión ERP', icon: '⚙️' }
   ];

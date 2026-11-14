@@ -13,7 +13,7 @@
 | **Portal E-commerce** | `/` | `apps/ecommerce/` | Astro 4 (`output: 'static'`) | `4321` (Astro CLI) |
 | **App Móvil PWA** | `/app` | `apps/pwa/` | React 18 + Vite + Service Worker | `5173` |
 | **Panel de Administración** | `/admin` | `apps/admin/` | React 18 + Vite | `5174` |
-| **Backend API & Static Server** | `/api/*`, `/api/idempiere/*` | `server/` | Express `4.19.2` + `mysql2` | `3000` |
+| **Backend API & Static Server** | `/api/*`, `/api/idempiere/*` | `server/` | Express `4.19.2` + SQLite 3 (`node:sqlite`) | `3000` |
 
 En producción, `npm run build:all` (o `Dockerfile`) compila los 3 frontends y los copia a:
 - `server/public/ecommerce`
@@ -72,10 +72,17 @@ Tanto en [`apps/admin/src/services/AuthService.js`](apps/admin/src/services/Auth
 - **`apps/admin`**:
   - Preservar `base: '/admin/'` en [`apps/admin/vite.config.js`](apps/admin/vite.config.js).
   - Estilos mediante CSS vanilla ([`apps/admin/src/index.css`](apps/admin/src/index.css)) y estilos inline estructurados con tipografía `Plus Jakarta Sans`.
-  - Mantener la modularidad por vistas/componentes en `apps/admin/src/components/` (`AdminSidebar`, `OrdersInbox`, `IdempiereErpView`, `ErpStatusModal`, `ProfileErpSettingsView`, `LoginPage`, `TwoStepContextForm`, `AuthGuard`).
+  - Mantener la modularidad por vistas/componentes en `apps/admin/src/components/` (`AdminSidebar`, `MasterCatalogsView`, `OrdersInbox`, `IdempiereErpView`, `ErpStatusModal`, `ProfileErpSettingsView`, `LoginPage`, `TwoStepContextForm`, `AuthGuard`).
 - **`server`**:
-  - El servidor funciona con MySQL si `DB_HOST` o `DATABASE_URL` están configurados y accesibles; de lo contrario, degrada automáticamente a estado In-Memory en [`server/src/db.js`](server/src/db.js) para desarrollo local rápido.
-  - Al agregar métodos en `server/src/db.js`, verificar los exports en `module.exports` (por ejemplo `db.getProducts()`, no `getAllProducts`).
+  - **Descarte de MySQL & Adopción de SQLite**: El backend utiliza el motor relacional SQLite 3 integrado en Node.js (`node:sqlite`) con persistencia en `server/data/database.sqlite` (configurable vía `SQLITE_DB_PATH`), modo WAL (Write-Ahead Logging) y claves foráneas activas. En Docker se expone el volumen persistente `/app/server/data`.
+  - **6 Catálogos Maestros ERP**:
+    1. Categorías de productos (`product_categories`, `M_Product_Category`): CRUD mantenible + sync ERP.
+    2. Catálogo de productos (`products`, `M_Product`): CRUD mantenible + sync ERP.
+    3. Catálogo de precios (`price_lists`, `price_list_versions`, `product_prices`, `M_PriceList`): CRUD mantenible + sync ERP.
+    4. Categorías de clientes (`customer_categories`, `C_BP_Group`): CRUD mantenible + sync ERP.
+    5. Catálogo de clientes (`customers`, `C_BPartner`): CRUD mantenible + sync ERP.
+    6. Catálogo de impuestos (`taxes`, `C_Tax`): **Solo lectura**, sin mutaciones manuales en UI, sincronizable desde ERP.
+  - Al agregar métodos en `server/src/db.js`, verificar los exports en `module.exports` (por ejemplo `db.getProducts()`, `db.getProductCategories()`, etc.).
 
 ---
 
@@ -107,9 +114,15 @@ npm start
 - **Landing E-commerce**: completa con 10 creaciones, filtros, modal `#detailModal` y botones `Ver Detalles` + enlace `/app`.
 - **PWA Móvil**: 5 pestañas funcionales, categorías sincronizadas dinámicamente con `/api/products`, carrito con cupones y seguimiento de órdenes, Service Worker `nextcollege-pwa-v2`.
 - **Panel Admin**:
-  - Layout con barra lateral [`AdminSidebar.jsx`](apps/admin/src/components/AdminSidebar.jsx) (`Resumen General`, `Catálogo Hamburguesas`, `Bandeja Pedidos`, `Métricas de Clientes`, `Estado Base de Datos`, `iDempiere ERP`, `Perfil & Conexión ERP`).
+  - Layout con barra lateral [`AdminSidebar.jsx`](apps/admin/src/components/AdminSidebar.jsx) (`Resumen General`, `Catálogos Maestros ERP` [badge 6], `Catálogo Hamburguesas`, `Bandeja Pedidos`, `Métricas de Clientes`, `Base de Datos SQLite`, `iDempiere ERP`, `Perfil & Conexión ERP`).
+  - **Módulo de Catálogos Maestros ERP** ([`MasterCatalogsView.jsx`](apps/admin/src/components/MasterCatalogsView.jsx)): navegación por pestañas para los 6 catálogos maestros sincronizables con iDempiere ERP (5 mantenibles con creación, edición, borrado y ajuste de precios + 1 de solo lectura para Impuestos `C_Tax`), sincronización individual o total (`POST /api/idempiere/sync/*`).
   - Bandeja central de pedidos de 3 capas ([`OrdersInbox.jsx`](apps/admin/src/components/OrdersInbox.jsx)) con filtros PWA vs E-commerce y sincronización `C_Order`.
+  - Monitor de Base de Datos SQLite con inspección de modo WAL, tamaño de archivo en disco, claves foráneas, latencia en ms y conteo de entidades en las tablas maestras.
   - Vista técnica ERP ([`IdempiereErpView.jsx`](apps/admin/src/components/IdempiereErpView.jsx)) e Inspector modal Bearer ([`ErpStatusModal.jsx`](apps/admin/src/components/ErpStatusModal.jsx)).
-  - Vista de Perfil & Configuración ([`ProfileErpSettingsView.jsx`](apps/admin/src/components/ProfileErpSettingsView.jsx)) con control de modo login (1 paso / 2 pasos), URL corporativa, Proxy CORS, parámetros por defecto (`es_PE` incluido) y endpoints de aprovisionamiento/sincronización de catálogo (`/api/idempiere/catalog/seed`, `/catalog/sync-sqlite`, `/catalog/history`).
+  - Vista de Perfil & Configuración ([`ProfileErpSettingsView.jsx`](apps/admin/src/components/ProfileErpSettingsView.jsx)) con control de modo login (1 paso / 2 pasos), URL corporativa, Proxy CORS y parámetros por defecto (`es_PE`).
   - Pantalla de Login pública white-label ([`LoginPage.jsx`](apps/admin/src/components/LoginPage.jsx)) sin menciones visibles a infraestructura interna ni iDempiere.
+- **Base de Datos & Backend**:
+  - MySQL descartado en favor de SQLite 3 (`node:sqlite`), sin dependencias nativas externas, almacenamiento persistente en `server/data/database.sqlite` y volumen Docker `/app/server/data`.
+  - Endpoints CRUD para los 5 catálogos mantenibles y solo lectura para impuestos en [`server/src/routes/api.js`](server/src/routes/api.js).
+  - Endpoints de sincronización de modelos ERP en [`server/src/routes/idempiere.js`](server/src/routes/idempiere.js).
 
