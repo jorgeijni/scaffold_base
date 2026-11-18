@@ -24,11 +24,11 @@ flowchart LR
   end
 
   subgraph Data["Capa de Datos Persistente"]
-    SQLITE["Motor Relacional SQLite 3 (node:sqlite)\nserver/data/database.sqlite · WAL Mode\n6 Catálogos Maestros + Órdenes + Historial"]
+    SQLITE["Motor Relacional SQLite 3 (node:sqlite)\nserver/data/database.sqlite · WAL Mode\n7 Catálogos Maestros + Órdenes + Historial"]
   end
 
   subgraph External["Sistema Externo Corporativo"]
-    ERP["iDempiere REST API v1\n/api/v1/auth/tokens, /models/*\nM_Product_Category, M_Product, M_PriceList,\nC_BP_Group, C_BPartner, C_Tax"]
+    ERP["iDempiere REST API v1\n/api/v1/auth/tokens, /models/*\nM_Product_Category, M_Product, M_PriceList,\nC_BP_Group, C_BPartner, XX_TipoIntervencionWash, C_Tax"]
   end
 
   E -->|Redirige pedido| P
@@ -89,8 +89,8 @@ scaffold_base/
 │               ├── AuthGuard.jsx       # Guardia de ruta autenticada (Bearer token)
 │               ├── LoginPage.jsx       # Login público white-label
 │               ├── TwoStepContextForm.jsx # Selector multitenant dinámico (Paso 2)
-│               ├── AdminSidebar.jsx    # Barra lateral del panel con accesos a catálogos
-│               ├── MasterCatalogsView.jsx # Módulo de los 6 catálogos maestros y sincronización ERP
+│               ├── AdminSidebar.jsx    # Barra lateral reactiva y colapsable (240px / 64px, Etendo AI UI)
+│               ├── MasterCatalogsView.jsx # Módulo de los catálogos maestros y sincronización ERP
 │               ├── OrdersInbox.jsx     # Bandeja 3-capas (PWA vs E-commerce + ERP sync)
 │               ├── IdempiereErpView.jsx # Consola técnica REST v1 + diagnóstico Ping
 │               ├── ErpStatusModal.jsx  # Modal Inspector de Sesión y JWT Bearer
@@ -102,9 +102,9 @@ scaffold_base/
     │   └── database.sqlite             # Archivo relacional de producción (WAL mode)
     └── src/
         ├── app.js                      # Servidor HTTP unificado, CORS, rutas y static SPA
-        ├── db.js                       # Motor SQLite 3 (node:sqlite) + 6 catálogos + transacciones
+        ├── db.js                       # Motor SQLite 3 (node:sqlite) + 7 catálogos + transacciones
         ├── routes/
-        │   ├── api.js                  # Endpoints CRUD para los 6 catálogos, órdenes y salud
+        │   ├── api.js                  # Endpoints CRUD para los 7 catálogos, órdenes y salud
         │   └── idempiere.js            # Proxy CORS, auth REST v1 y sincronización de modelos ERP
         └── services/
             └── idempiereService.js     # Cliente backend para iDempiere REST API v1
@@ -144,20 +144,36 @@ Navegación integrada por pestañas con soporte completo para sincronización co
 5. 👤 **Catálogo de Clientes / Socios de Negocio** (`C_BPartner`):
    - Mantenible: Registro y edición de clientes (DNI/RUC, nombre, categoría, teléfono, correo, dirección de entrega), histórico de pedidos y consumo acumulado.
    - Sincronización ERP: `POST /api/idempiere/sync/customers`.
-6. 🏛️ **Catálogo de Impuestos** (`C_Tax`):
+6. 🚿 **Tipos de Intervención Wash** (`XX_TipoIntervencionWash`):
+   - Mantenible: Catálogo de servicios de lavado vehicular y detallado (`TIW-001` a `TIW-006`: Express, Integral, Chasis, Motor, Detailing, Cerámico), con tarifas estándar (`price_std`), duración en minutos y categoría técnica.
+   - Sincronización ERP: `POST /api/idempiere/sync/tipo-intervencion-wash`.
+7. 🏛️ **Catálogo de Impuestos** (`C_Tax`):
    - **SOLO LECTURA**: Bloqueado contra modificaciones manuales en la interfaz para garantizar integridad tributaria.
    - Visualización de tasas oficiales (ej. IGV 18%, Recargo al Servicio 10%, Exonerado 0%, ICBPER) y botón de consulta/sincronización desde el ERP (`POST /api/idempiere/sync/taxes`).
-- **Botón Global de Sincronización Total**: Ejecuta `POST /api/idempiere/sync/all` actualizando los 6 catálogos en una sola operación con auditoría en `sync_history`.
+- **Botón Global de Sincronización Total**: Ejecuta `POST /api/idempiere/sync/all` actualizando los 7 catálogos en una sola operación con auditoría en `sync_history`.
 
-#### Secciones del Control Dashboard
-1. **`Resumen General`** (`resumen`): KPIs ejecutivos + bandeja central de pedidos integrada.
-2. **`Catálogos Maestros ERP`** (`catalogs` — [`MasterCatalogsView.jsx`](apps/admin/src/components/MasterCatalogsView.jsx)): Consola de los 6 catálogos descritos arriba.
-3. **`Catálogo Hamburguesas`** (`burgers`): Administración rápida de hamburguesas y recetas.
-4. **`Bandeja Pedidos`** (`orders` — [`OrdersInbox.jsx`](apps/admin/src/components/OrdersInbox.jsx)): Filtrado por canal (PWA vs E-commerce), estados operativos y sincronización `C_Order`.
-5. **`Métricas de Clientes`** (`customers`): Segmentación LTV (VIP, Platino, Regular).
-6. **`Base de Datos SQLite`** (`database`): Inspección de salud de SQLite 3, tamaño en disco, modo WAL, tiempo de respuesta en ms y conteo de entidades en las tablas maestras.
-7. **`iDempiere ERP`** (`idempiere` — [`IdempiereErpView.jsx`](apps/admin/src/components/IdempiereErpView.jsx)): Auditoría de protocolo REST v1, visor Bearer JWT y diagnóstico Ping.
-8. **`Perfil & Conexión ERP`** (`profile` — [`ProfileErpSettingsView.jsx`](apps/admin/src/components/ProfileErpSettingsView.jsx)): Perfil activo, configuración de proxy CORS y modo login (1 paso / 2 pasos).
+#### Estructura de Navegación del Panel (Barra Lateral Replicada)
+La barra lateral ([`AdminSidebar.jsx`](apps/admin/src/components/AdminSidebar.jsx)) replica fielmente la interfaz corporativa moderna (Etendo AI Suite):
+- **Modos Duales**: Expandido (`240px`) y Colapsado compacto (`64px`), con botones de alternancia (`panel-left-close` y `panel-left-open`) y persistencia en `localStorage` (`admin_sidebar_collapsed`).
+- **Encabezado**: Logotipo lime green (`#bef264`) con glifo `<>`, selector de empresa/usuario con popover contextual y estado "Demo".
+- **Categorías y Secciones**:
+  1. **`General`**:
+     - *Inicio* (`resumen`): KPIs ejecutivos + bandeja central de pedidos integrada.
+     - *Favoritos*: Acordeón con accesos rápidos a Pedidos, Hamburguesas y Catálogos.
+  2. **`Comercial`**:
+     - *Contactos* (`customers`): Métricas de clientes y gestión de terceros (`C_BPartner`), resaltado con tarjeta blanca activa.
+     - *Ventas*: Acordeón con Bandeja de Pedidos (`orders`), Catálogo Hamburguesas (`burgers`) y Tarifas.
+  3. **`Operaciones`**:
+     - *Compras*: Acordeón con Órdenes de compra y Proveedores.
+     - *Inventario*: Acordeón con Stock de Hamburguesas (`burgers`), Catálogo `M_Product` y Categorías `M_Product_Category`.
+  4. **`Finanzas`**:
+     - *Finanzas*: Acordeón con Tarifas `M_PriceList`, Impuestos `C_Tax` y Proceso Contable.
+  5. **`Sistema`**:
+     - *Conectar agente de IA*: Modal interactivo con estado de conexión, modelo LLM activo y capacidades ERP.
+     - *Configuración*: Acordeón jerárquico con guías de árbol a 33px: Organización, Secuencias de documentos, Tarifa, Condiciones de pago, Categoría de Contacto, Usuarios, Roles, Proceso Contable, Configuración Fiscal, Base de Datos SQLite y Conexión iDempiere ERP.
+- **Pie de Página**:
+  - *Ayuda y soporte*: Acceso a inspector de sesión y token JWT Bearer.
+  - *Perfil de Usuario*: Menú emergente con credenciales, enlaces directos a E-commerce y PWA, y botón de cierre de sesión. En modo colapsado muestra el avatar circular `J` con insignia inferior `A`.
 
 ---
 
@@ -182,6 +198,8 @@ Navegación integrada por pestañas con soporte completo para sincronización co
 | `GET/PUT/DELETE` | `/api/customer-categories/:id` | Obtener, actualizar o eliminar grupo de clientes | **Mantenible** |
 | `GET/POST` | `/api/customers` | Listar y crear clientes / terceros | **Mantenible** |
 | `GET/PUT/DELETE` | `/api/customers/:id` | Obtener, actualizar o eliminar cliente | **Mantenible** |
+| `GET/POST` | `/api/tipo-intervencion-wash` | Listar y crear tipos de intervención wash | **Mantenible** |
+| `GET/PUT/DELETE` | `/api/tipo-intervencion-wash/:id` | Obtener, actualizar o eliminar tipo de intervención | **Mantenible** |
 | `GET` | `/api/taxes` | Listar impuestos oficiales activos | **Solo Lectura** |
 | `GET` | `/api/taxes/:id` | Detalle de impuesto (mutaciones retornan `405`) | **Solo Lectura** |
 | `GET` | `/api/orders` | Listado de órdenes multicanal | Lectura |
@@ -197,8 +215,9 @@ Navegación integrada por pestañas con soporte completo para sincronización co
 | `POST` | `/api/idempiere/sync/pricelists` | Sincroniza listas de precios desde `M_PriceList` hacia SQLite |
 | `POST` | `/api/idempiere/sync/customer-categories` | Sincroniza grupos de terceros desde `C_BP_Group` hacia SQLite |
 | `POST` | `/api/idempiere/sync/customers` | Sincroniza clientes desde `C_BPartner` hacia SQLite |
+| `POST` | `/api/idempiere/sync/tipo-intervencion-wash` | Sincroniza tipos de intervención desde `XX_TipoIntervencionWash` hacia SQLite |
 | `POST` | `/api/idempiere/sync/taxes` | Sincroniza impuestos oficiales desde `C_Tax` hacia SQLite |
-| `POST` | `/api/idempiere/sync/all` | Sincronización integral de los 6 catálogos maestros |
+| `POST` | `/api/idempiere/sync/all` | Sincronización integral de los 7 catálogos maestros |
 | `GET` | `/api/idempiere/sync/history` | Historial de sincronizaciones y auditoría de eventos |
 | `POST` | `/api/idempiere/authenticate` | Paso 1 autenticación server-side |
 | `POST` | `/api/idempiere/login` | Login directo o Paso 2 server-side |
@@ -215,6 +234,7 @@ El motor relacional utiliza `node:sqlite` nativo (sin compilaciones C++ externas
 - **`customer_categories`**: `id`, `idempiere_id`, `value` (UNIQUE), `name`, `description`, `discount_percent`, `is_default`, `is_active`, timestamps.
 - **`customers`**: `id`, `idempiere_id`, `value` (UNIQUE), `name`, `category_id` (FK), `category_name`, `tax_id`, `email`, `phone`, `address`, `avatar`, `tier`, `total_spent`, `orders_count`, `favorite_burger`, `is_active`, timestamps.
 - **`taxes`**: `id`, `idempiere_id`, `value` (UNIQUE), `name`, `rate`, `category_name`, `is_active`, `description`, timestamps.
+- **`tipo_intervencion_wash`**: `id`, `idempiere_id`, `value` (UNIQUE), `name`, `description`, `category`, `duration_minutes`, `price_std`, `is_active`, `created_at`, `updated_at`.
 - **`orders`**: `id`, `customer_name`, `customer_id` (FK), `items_json`, `total`, `status`, `channel`, `origin_type`, `sales_rep`, `erp_sync_status`, `erp_document_no`, `erp_context_json`, `address`, `created_at`.
 - **`sync_history`**: `id`, `catalog_name`, `records_synced`, `status`, `source`, `details`, `created_at`.
 

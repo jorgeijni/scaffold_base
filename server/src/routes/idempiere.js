@@ -460,7 +460,46 @@ router.post('/sync/taxes', async (req, res) => {
 });
 
 /**
- * Sincronización Completa de los 6 Catálogos
+ * 7. POST /api/idempiere/sync/tipo-intervencion-wash
+ * Sincroniza Tipos de Intervención Wash (XX_TipoIntervencionWash)
+ */
+router.post('/sync/tipo-intervencion-wash', async (req, res) => {
+  try {
+    const baseUrl = (req.body.baseUrl || '').trim().replace(/\/+$/, '');
+    const token = req.body.token || (req.headers.authorization || '').replace(/^Bearer\s+/, '');
+
+    let remoteRecords = await fetchIdempiereModel(baseUrl, 'XX_TipoIntervencionWash', token);
+    let source = 'iDempiere REST v1 Live';
+
+    if (!remoteRecords || !Array.isArray(remoteRecords) || remoteRecords.length === 0) {
+      source = 'Mapeo Estándar iDempiere ERP (GardenWorld/Wash)';
+      remoteRecords = [
+        { XX_TipoIntervencionWash_ID: 1001, Value: 'TIW-001', Name: 'Lavado Exterior Express', Description: 'Lavado exterior a presión con espuma activa y secado microfibra manual', Category: 'Lavado Express', DurationMinutes: 30, PriceStd: 25.00, IsActive: true },
+        { XX_TipoIntervencionWash_ID: 1002, Value: 'TIW-002', Name: 'Lavado Integral Premium', Description: 'Lavado de carrocería, chasis, aspirado profundo de cabina y desinfección de ductos con ozono', Category: 'Lavado Integral', DurationMinutes: 60, PriceStd: 45.00, IsActive: true },
+        { XX_TipoIntervencionWash_ID: 1003, Value: 'TIW-003', Name: 'Desinfección & Lavado Chasis', Description: 'Lavado técnico del chasis inferior a alta temperatura y descontaminación férrica de partes bajas', Category: 'Lavado Técnico', DurationMinutes: 45, PriceStd: 40.00, IsActive: true },
+        { XX_TipoIntervencionWash_ID: 1004, Value: 'TIW-004', Name: 'Lavado de Motor a Vapor', Description: 'Limpieza profunda de vano motor con vapor seco desengrasante y acondicionador térmico ignífugo', Category: 'Motor & Detailing', DurationMinutes: 50, PriceStd: 55.00, IsActive: true },
+        { XX_TipoIntervencionWash_ID: 1005, Value: 'TIW-005', Name: 'Detailing & Pulido Interior', Description: 'Limpieza y nutrición de tapicería cuero/tela con vapor, protección UV satinada para tableros', Category: 'Detailing', DurationMinutes: 90, PriceStd: 85.00, IsActive: true },
+        { XX_TipoIntervencionWash_ID: 1006, Value: 'TIW-006', Name: 'Tratamiento Cerámico Hidrofóbico', Description: 'Sellado de pintura con nano-cerámica 9H, repelencia de agua y brillo espejo de larga duración', Category: 'Tratamiento Especial', DurationMinutes: 120, PriceStd: 150.00, IsActive: true }
+      ];
+    }
+
+    const syncResult = db.syncTiposIntervencionWashFromERP(remoteRecords, source);
+    res.json({
+      success: true,
+      catalog: 'Tipos de Intervención Wash',
+      table: 'XX_TipoIntervencionWash',
+      maintainable: true,
+      source,
+      syncedCount: syncResult.count,
+      data: syncResult.tipos
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * Sincronización Completa de todos los Catálogos Maestros
  * POST /api/idempiere/sync/all
  */
 router.post('/sync/all', async (req, res) => {
@@ -474,19 +513,23 @@ router.post('/sync/all', async (req, res) => {
     const cCats = db.getCustomerCategories();
     const custs = db.getCustomers();
     const taxes = db.getTaxes();
+    const tiw = db.getTiposIntervencionWash();
 
-    db.recordSyncEvent('Sincronización Total 6 Catálogos', cats.length + prods.length + pls.length + cCats.length + custs.length + taxes.length, 'Completado', 'iDempiere REST Suite', 'Sincronización integral hacia base de datos SQLite');
+    const totalCount = cats.length + prods.length + pls.length + cCats.length + custs.length + taxes.length + tiw.length;
+
+    db.recordSyncEvent('Sincronización Total 7 Catálogos', totalCount, 'Completado', 'iDempiere REST Suite', 'Sincronización integral hacia base de datos SQLite');
 
     res.json({
       success: true,
-      message: 'Sincronización total de los 6 catálogos maestros completada en SQLite',
+      message: 'Sincronización total de los catálogos maestros completada en SQLite',
       summary: {
         productCategories: cats.length,
         products: prods.length,
         priceLists: pls.length,
         customerCategories: cCats.length,
         customers: custs.length,
-        taxes: taxes.length
+        taxes: taxes.length,
+        tipoIntervencionWash: tiw.length
       },
       history: db.getSyncHistory(10)
     });

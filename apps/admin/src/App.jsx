@@ -17,6 +17,14 @@ const SECTION_META = {
     title: 'Catálogos Maestros ERP & Base de Datos SQLite',
     subtitle: 'Mantenimiento de tablas maestras y sincronización con iDempiere ERP'
   },
+  'tipo-intervencion-wash': {
+    title: 'Catálogo de Tipos de Intervención Wash',
+    subtitle: 'Administración de servicios de lavado, tiempos estándar y sincronización con iDempiere ERP'
+  },
+  pricelists: {
+    title: 'Catálogo de Tarifas y Listas de Precios',
+    subtitle: 'Versiones oficiales de precios, márgenes y sincronización M_PriceList'
+  },
   burgers: {
     title: 'Catálogo de Hamburguesas',
     subtitle: 'Administración de recetas nobles, precios, stock y niveles de especialidad'
@@ -171,7 +179,15 @@ function AdminDashboardContent() {
   const { user, logout, getAuthHeaders } = useAuth();
   const [isErpModalOpen, setIsErpModalOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [activeSection, setActiveSection] = useState('resumen'); // 'resumen' | 'burgers' | 'orders' | 'customers' | 'database' | 'idempiere' | 'profile'
+  const [activeSection, setActiveSection] = useState('resumen'); // 'resumen' | 'burgers' | 'orders' | 'customers' | 'database' | 'idempiere' | 'profile' | 'catalogs'
+  const [activeCatalogSubTab, setActiveCatalogSubTab] = useState('categories');
+
+  const handleSelectSection = (section, subTab) => {
+    setActiveSection(section);
+    if (subTab) {
+      setActiveCatalogSubTab(subTab);
+    }
+  };
   const [burgers, setBurgers] = useState(INITIAL_FALLBACK_BURGERS);
   const [customerMetrics, setCustomerMetrics] = useState(null);
   const [dbStatus, setDbStatus] = useState(null);
@@ -370,7 +386,8 @@ function AdminDashboardContent() {
       {/* Left Control Dashboard Sidebar */}
       <AdminSidebar
         activeSection={activeSection}
-        onSelectSection={setActiveSection}
+        activeCatalogSubTab={activeCatalogSubTab}
+        onSelectSection={handleSelectSection}
         burgersCount={burgers.length}
         ordersCount={orders.length}
         onOpenInspector={() => setIsErpModalOpen(true)}
@@ -695,7 +712,15 @@ function AdminDashboardContent() {
           {/* SECCIÓN NUEVA: CATÁLOGOS MAESTROS ERP (MANTENIBLES + SOLO LECTURA) */}
           {/* ================================================================ */}
           {activeSection === 'catalogs' && (
-            <MasterCatalogsView />
+            <MasterCatalogsView activeSubTab={activeCatalogSubTab} key={activeCatalogSubTab} />
+          )}
+
+          {activeSection === 'tipo-intervencion-wash' && (
+            <MasterCatalogsView initialSubTab="tipo-intervencion-wash" />
+          )}
+
+          {activeSection === 'pricelists' && (
+            <MasterCatalogsView initialSubTab="pricelists" />
           )}
 
           {/* ================================================================ */}
@@ -1359,6 +1384,15 @@ function AdminDashboardContent() {
                     </div>
                     <div style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: '700' }}>
                       🏛️ Impuestos (C_Tax · Solo Lectura)
+                    </div>
+                  </div>
+
+                  <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '12px' }}>
+                    <div style={{ fontSize: '1.4rem', fontWeight: '800', color: '#0284c7' }}>
+                      {dbStatus?.entityCounts?.tipoIntervencionWash ?? 6}
+                    </div>
+                    <div style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: '700' }}>
+                      🚿 Intervención Wash (XX_TipoIntervencionWash)
                     </div>
                   </div>
 

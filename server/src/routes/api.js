@@ -402,6 +402,61 @@ router.all(['/taxes', '/taxes/:id'], (req, res, next) => {
 });
 
 // ==========================================
+// 6.b. TIPOS DE INTERVENCIÓN WASH (Mantenible)
+// ==========================================
+router.get('/tipo-intervencion-wash', (req, res) => {
+  try {
+    const tipos = db.getTiposIntervencionWash();
+    res.json({ success: true, count: tipos.length, data: tipos });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.get('/tipo-intervencion-wash/:id', (req, res) => {
+  try {
+    const tipo = db.getTipoIntervencionWashById(req.params.id);
+    if (!tipo) return res.status(404).json({ success: false, error: 'Tipo de intervención no encontrado' });
+    res.json({ success: true, data: tipo });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.post('/tipo-intervencion-wash', (req, res) => {
+  try {
+    const { name } = req.body;
+    if (!name) {
+      return res.status(400).json({ success: false, error: 'El nombre de la intervención es obligatorio.' });
+    }
+    const created = db.addTipoIntervencionWash(req.body);
+    res.status(201).json({ success: true, message: 'Tipo de intervención wash creado', data: created });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.put('/tipo-intervencion-wash/:id', (req, res) => {
+  try {
+    const updated = db.updateTipoIntervencionWash(req.params.id, req.body);
+    if (!updated) return res.status(404).json({ success: false, error: 'Tipo de intervención no encontrado' });
+    res.json({ success: true, message: 'Tipo de intervención wash actualizado', data: updated });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.delete('/tipo-intervencion-wash/:id', (req, res) => {
+  try {
+    const deleted = db.deleteTipoIntervencionWash(req.params.id);
+    if (!deleted) return res.status(404).json({ success: false, error: 'Tipo de intervención no encontrado' });
+    res.json({ success: true, message: 'Tipo de intervención wash eliminado' });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ==========================================
 // 7. CONSUMER METRICS & ORDERS
 // ==========================================
 router.get('/metrics/customers', (req, res) => {

@@ -5,7 +5,7 @@ import AuthService from '../services/AuthService';
 export default function MasterCatalogsView({ activeSubTab: initialSubTab = 'categories' }) {
   const { token, baseUrl } = useAuth();
 
-  // Subtab: 'categories' | 'products' | 'pricelists' | 'customer-categories' | 'customers' | 'taxes'
+  // Subtab: 'categories' | 'products' | 'pricelists' | 'customer-categories' | 'customers' | 'taxes' | 'tipo-intervencion-wash'
   const [activeCatalog, setActiveCatalog] = useState(initialSubTab);
 
   // Data States
@@ -15,6 +15,7 @@ export default function MasterCatalogsView({ activeSubTab: initialSubTab = 'cate
   const [customerCategories, setCustomerCategories] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [taxes, setTaxes] = useState([]);
+  const [tiposIntervencionWash, setTiposIntervencionWash] = useState([]);
   const [syncHistory, setSyncHistory] = useState([]);
 
   // Price List Selection & Versions State
@@ -64,13 +65,14 @@ export default function MasterCatalogsView({ activeSubTab: initialSubTab = 'cate
   const fetchAllCatalogs = async () => {
     setLoading(true);
     try {
-      const [catRes, prodRes, plRes, cCatRes, custRes, taxRes, histRes] = await Promise.all([
+      const [catRes, prodRes, plRes, cCatRes, custRes, taxRes, tiwRes, histRes] = await Promise.all([
         fetch('/api/categories').then(r => r.json()),
         fetch('/api/products').then(r => r.json()),
         fetch('/api/pricelists').then(r => r.json()),
         fetch('/api/customer-categories').then(r => r.json()),
         fetch('/api/customers').then(r => r.json()),
         fetch('/api/taxes').then(r => r.json()),
+        fetch('/api/tipo-intervencion-wash').then(r => r.json()),
         fetch('/api/idempiere/sync/history').then(r => r.json())
       ]);
 
@@ -87,6 +89,7 @@ export default function MasterCatalogsView({ activeSubTab: initialSubTab = 'cate
       if (cCatRes.success) setCustomerCategories(cCatRes.data || []);
       if (custRes.success) setCustomers(custRes.data || []);
       if (taxRes.success) setTaxes(taxRes.data || []);
+      if (tiwRes.success) setTiposIntervencionWash(tiwRes.data || []);
       if (histRes.success) setSyncHistory(histRes.data || []);
     } catch (err) {
       console.error('Error cargando catálogos:', err);
@@ -132,6 +135,7 @@ export default function MasterCatalogsView({ activeSubTab: initialSubTab = 'cate
     if (catalogKey === 'customer-categories') endpoint = '/api/idempiere/sync/customer-categories';
     if (catalogKey === 'customers') endpoint = '/api/idempiere/sync/customers';
     if (catalogKey === 'taxes') endpoint = '/api/idempiere/sync/taxes';
+    if (catalogKey === 'tipo-intervencion-wash') endpoint = '/api/idempiere/sync/tipo-intervencion-wash';
 
     try {
       const res = await fetch(endpoint, {
@@ -212,6 +216,16 @@ export default function MasterCatalogsView({ activeSubTab: initialSubTab = 'cate
         tier: 'Regular',
         is_active: true
       });
+    } else if (activeCatalog === 'tipo-intervencion-wash') {
+      setFormData({
+        name: '',
+        value: '',
+        category: 'Lavado Estándar',
+        duration_minutes: '45',
+        price_std: '25.00',
+        description: '',
+        is_active: true
+      });
     }
   };
 
@@ -245,6 +259,8 @@ export default function MasterCatalogsView({ activeSubTab: initialSubTab = 'cate
         endpoint = modalMode === 'create' ? '/api/customer-categories' : `/api/customer-categories/${editingItem.id}`;
       } else if (activeCatalog === 'customers') {
         endpoint = modalMode === 'create' ? '/api/customers' : `/api/customers/${editingItem.id}`;
+      } else if (activeCatalog === 'tipo-intervencion-wash') {
+        endpoint = modalMode === 'create' ? '/api/tipo-intervencion-wash' : `/api/tipo-intervencion-wash/${editingItem.id}`;
       }
 
       const res = await fetch(endpoint, {
@@ -279,6 +295,7 @@ export default function MasterCatalogsView({ activeSubTab: initialSubTab = 'cate
     if (activeCatalog === 'pricelists') endpoint = `/api/pricelists/${id}`;
     if (activeCatalog === 'customer-categories') endpoint = `/api/customer-categories/${id}`;
     if (activeCatalog === 'customers') endpoint = `/api/customers/${id}`;
+    if (activeCatalog === 'tipo-intervencion-wash') endpoint = `/api/tipo-intervencion-wash/${id}`;
 
     try {
       const res = await fetch(endpoint, { method: 'DELETE' });
@@ -388,7 +405,7 @@ export default function MasterCatalogsView({ activeSubTab: initialSubTab = 'cate
             }}
           >
             <span>{syncingCatalog === 'all' ? '⏳' : '⚡'}</span>
-            <span>{syncingCatalog === 'all' ? 'Sincronizando Todo...' : 'Sincronización Total ERP (6 Catálogos)'}</span>
+            <span>{syncingCatalog === 'all' ? 'Sincronizando Todo...' : 'Sincronización Total ERP (7 Catálogos)'}</span>
           </button>
 
           <button
@@ -410,7 +427,7 @@ export default function MasterCatalogsView({ activeSubTab: initialSubTab = 'cate
         </div>
       </div>
 
-      {/* Tabs Selector for the 6 Catalogs */}
+      {/* Tabs Selector for the 7 Catalogs */}
       <div style={{
         display: 'flex',
         gap: '6px',
@@ -426,6 +443,7 @@ export default function MasterCatalogsView({ activeSubTab: initialSubTab = 'cate
           { id: 'pricelists', label: 'Catálogo de Precios', icon: '💲', count: priceLists.length, maintainable: true, erpTable: 'M_PriceList' },
           { id: 'customer-categories', label: 'Categorías Clientes', icon: '👥', count: customerCategories.length, maintainable: true, erpTable: 'C_BP_Group' },
           { id: 'customers', label: 'Catálogo Clientes', icon: '👤', count: customers.length, maintainable: true, erpTable: 'C_BPartner' },
+          { id: 'tipo-intervencion-wash', label: 'Tipos Intervención Wash', icon: '🚿', count: tiposIntervencionWash.length, maintainable: true, erpTable: 'XX_TipoIntervencionWash' },
           { id: 'taxes', label: 'Impuestos (Solo Lectura)', icon: '🏛️', count: taxes.length, maintainable: false, erpTable: 'C_Tax' }
         ].map(tab => {
           const isActive = activeCatalog === tab.id;
@@ -1161,6 +1179,184 @@ export default function MasterCatalogsView({ activeSubTab: initialSubTab = 'cate
           </div>
         )}
 
+        {/* 7. TIPOS DE INTERVENCIÓN WASH */}
+        {activeCatalog === 'tipo-intervencion-wash' && (
+          <div style={{ background: '#ffffff', borderRadius: '14px', border: '1px solid #e2e8f0', padding: '20px', boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '18px' }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <h3 style={{ fontSize: '1.15rem', fontWeight: '800', color: '#0f172a', margin: 0 }}>
+                    Tipos de Intervención Wash
+                  </h3>
+                  <span style={{ background: '#ecfdf5', color: '#047857', border: '1px solid #a7f3d0', fontSize: '0.72rem', fontWeight: '800', padding: '2px 8px', borderRadius: '6px' }}>
+                    XX_TipoIntervencionWash (Mantenible)
+                  </span>
+                </div>
+                <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '3px' }}>
+                  Gestión de servicios de lavado, duraciones estimadas, tarifas estándar y sincronización con iDempiere ERP.
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  onClick={openCreateModal}
+                  style={{
+                    background: '#ea580c',
+                    color: '#ffffff',
+                    border: 'none',
+                    borderRadius: '8px',
+                    padding: '8px 14px',
+                    fontSize: '0.82rem',
+                    fontWeight: '800',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
+                >
+                  + Nueva Intervención Wash
+                </button>
+                <button
+                  onClick={() => handleSyncCatalog('tipo-intervencion-wash')}
+                  disabled={syncingCatalog === 'tipo-intervencion-wash'}
+                  style={{
+                    background: '#ffffff',
+                    border: '1px solid #cbd5e1',
+                    borderRadius: '8px',
+                    padding: '8px 14px',
+                    fontSize: '0.82rem',
+                    fontWeight: '700',
+                    color: '#334155',
+                    cursor: syncingCatalog === 'tipo-intervencion-wash' ? 'not-allowed' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
+                >
+                  <span>{syncingCatalog === 'tipo-intervencion-wash' ? '⏳' : '⚡'}</span>
+                  <span>{syncingCatalog === 'tipo-intervencion-wash' ? 'Sincronizando...' : 'Sincronizar ERP'}</span>
+                </button>
+              </div>
+            </div>
+
+            <div style={{ marginBottom: '14px' }}>
+              <input
+                type="text"
+                placeholder="Buscar por código, nombre, categoría o descripción..."
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '9px 14px',
+                  borderRadius: '8px',
+                  border: '1px solid #cbd5e1',
+                  fontSize: '0.85rem'
+                }}
+              />
+            </div>
+
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.86rem' }}>
+                <thead>
+                  <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0', color: '#475569' }}>
+                    <th style={{ padding: '12px 16px' }}>Código</th>
+                    <th style={{ padding: '12px 16px' }}>Nombre de Intervención</th>
+                    <th style={{ padding: '12px 16px' }}>Categoría</th>
+                    <th style={{ padding: '12px 16px' }}>Duración Est.</th>
+                    <th style={{ padding: '12px 16px' }}>Precio Estándar</th>
+                    <th style={{ padding: '12px 16px' }}>ID ERP</th>
+                    <th style={{ padding: '12px 16px' }}>Estado</th>
+                    <th style={{ padding: '12px 16px', textAlign: 'right' }}>Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filterList(tiposIntervencionWash, ['name', 'value', 'category', 'description']).map(tiw => (
+                    <tr key={tiw.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                      <td style={{ padding: '14px 16px', fontWeight: '800', color: '#0f172a' }}>
+                        {tiw.value}
+                      </td>
+                      <td style={{ padding: '14px 16px' }}>
+                        <div style={{ fontWeight: '800', color: '#0f172a' }}>{tiw.name}</div>
+                        <div style={{ fontSize: '0.78rem', color: '#64748b', maxWidth: '320px', marginTop: '2px' }}>
+                          {tiw.description || 'Sin descripción'}
+                        </div>
+                      </td>
+                      <td style={{ padding: '14px 16px' }}>
+                        <span style={{
+                          background: '#eff6ff',
+                          color: '#1d4ed8',
+                          border: '1px solid #bfdbfe',
+                          padding: '3px 9px',
+                          borderRadius: '12px',
+                          fontSize: '0.78rem',
+                          fontWeight: '800'
+                        }}>
+                          {tiw.category}
+                        </span>
+                      </td>
+                      <td style={{ padding: '14px 16px', fontWeight: '700', color: '#334155' }}>
+                        ⏱️ {tiw.duration_minutes} min
+                      </td>
+                      <td style={{ padding: '14px 16px', fontWeight: '800', color: '#059669', fontSize: '0.92rem' }}>
+                        S/ {Number(tiw.price_std).toFixed(2)}
+                      </td>
+                      <td style={{ padding: '14px 16px', fontSize: '0.8rem', color: '#64748b' }}>
+                        {tiw.idempiere_id ? `#${tiw.idempiere_id}` : 'Local (SQLite)'}
+                      </td>
+                      <td style={{ padding: '14px 16px' }}>
+                        <span style={{
+                          background: tiw.is_active ? '#dcfce7' : '#fee2e2',
+                          color: tiw.is_active ? '#166534' : '#991b1b',
+                          padding: '3px 8px',
+                          borderRadius: '12px',
+                          fontSize: '0.75rem',
+                          fontWeight: '800'
+                        }}>
+                          {tiw.is_active ? 'Activo' : 'Inactivo'}
+                        </span>
+                      </td>
+                      <td style={{ padding: '14px 16px', textAlign: 'right' }}>
+                        <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+                          <button
+                            onClick={() => openEditModal(tiw)}
+                            style={{
+                              background: '#f8fafc',
+                              border: '1px solid #cbd5e1',
+                              borderRadius: '6px',
+                              padding: '5px 9px',
+                              fontSize: '0.75rem',
+                              fontWeight: '700',
+                              color: '#334155',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            Editar
+                          </button>
+                          <button
+                            onClick={() => handleDeleteItem(tiw.id, tiw.name)}
+                            style={{
+                              background: '#fff1f2',
+                              border: '1px solid #fecdd3',
+                              borderRadius: '6px',
+                              padding: '5px 9px',
+                              fontSize: '0.75rem',
+                              fontWeight: '700',
+                              color: '#e11d48',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            Eliminar
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
       </div>
 
       {/* ======================================================== */}
@@ -1198,7 +1394,9 @@ export default function MasterCatalogsView({ activeSubTab: initialSubTab = 'cate
                   activeCatalog === 'categories' ? 'Categoría de Productos' :
                   activeCatalog === 'products' ? 'Producto' :
                   activeCatalog === 'pricelists' ? 'Lista de Precios' :
-                  activeCatalog === 'customer-categories' ? 'Categoría de Clientes' : 'Cliente / Socio de Negocio'
+                  activeCatalog === 'customer-categories' ? 'Categoría de Clientes' :
+                  activeCatalog === 'tipo-intervencion-wash' ? 'Tipo de Intervención Wash' :
+                  'Cliente / Socio de Negocio'
                 }
               </h2>
               <button onClick={closeModal} style={{ background: 'none', border: 'none', fontSize: '1.2rem', cursor: 'pointer', color: '#64748b' }}>×</button>
@@ -1538,6 +1736,96 @@ export default function MasterCatalogsView({ activeSubTab: initialSubTab = 'cate
                       onChange={e => setFormData({ ...formData, is_active: e.target.checked })}
                     />
                     <label htmlFor="cust_act" style={{ fontSize: '0.85rem', fontWeight: '700', color: '#0f172a' }}>Cliente Activo</label>
+                  </div>
+                </>
+              )}
+
+              {/* Campos para TIPOS DE INTERVENCIÓN WASH */}
+              {activeCatalog === 'tipo-intervencion-wash' && (
+                <>
+                  <div>
+                    <label style={{ fontSize: '0.8rem', fontWeight: '700', color: '#475569' }}>Nombre de la Intervención *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="ej. Lavado Integral Premium"
+                      value={formData.name || ''}
+                      onChange={e => setFormData({ ...formData, name: e.target.value })}
+                      style={{ width: '100%', padding: '9px 12px', border: '1px solid #cbd5e1', borderRadius: '8px', marginTop: '4px' }}
+                    />
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                    <div>
+                      <label style={{ fontSize: '0.8rem', fontWeight: '700', color: '#475569' }}>Código / Identificador</label>
+                      <input
+                        type="text"
+                        placeholder="ej. TIW-007"
+                        value={formData.value || ''}
+                        onChange={e => setFormData({ ...formData, value: e.target.value })}
+                        style={{ width: '100%', padding: '9px 12px', border: '1px solid #cbd5e1', borderRadius: '8px', marginTop: '4px' }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '0.8rem', fontWeight: '700', color: '#475569' }}>Categoría de Servicio</label>
+                      <select
+                        value={formData.category || 'Lavado Estándar'}
+                        onChange={e => setFormData({ ...formData, category: e.target.value })}
+                        style={{ width: '100%', padding: '9px 12px', border: '1px solid #cbd5e1', borderRadius: '8px', marginTop: '4px' }}
+                      >
+                        <option value="Lavado Express">Lavado Express</option>
+                        <option value="Lavado Estándar">Lavado Estándar</option>
+                        <option value="Lavado Integral">Lavado Integral</option>
+                        <option value="Lavado Técnico">Lavado Técnico</option>
+                        <option value="Motor & Detailing">Motor & Detailing</option>
+                        <option value="Detailing">Detailing</option>
+                        <option value="Tratamiento Especial">Tratamiento Especial</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                    <div>
+                      <label style={{ fontSize: '0.8rem', fontWeight: '700', color: '#475569' }}>Duración Estimada (min)</label>
+                      <input
+                        type="number"
+                        min="5"
+                        max="600"
+                        placeholder="45"
+                        value={formData.duration_minutes || ''}
+                        onChange={e => setFormData({ ...formData, duration_minutes: e.target.value })}
+                        style={{ width: '100%', padding: '9px 12px', border: '1px solid #cbd5e1', borderRadius: '8px', marginTop: '4px' }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '0.8rem', fontWeight: '700', color: '#475569' }}>Precio Estándar (S/)</label>
+                      <input
+                        type="number"
+                        step="0.10"
+                        min="0"
+                        placeholder="25.00"
+                        value={formData.price_std || ''}
+                        onChange={e => setFormData({ ...formData, price_std: e.target.value })}
+                        style={{ width: '100%', padding: '9px 12px', border: '1px solid #cbd5e1', borderRadius: '8px', marginTop: '4px' }}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '0.8rem', fontWeight: '700', color: '#475569' }}>Descripción del Servicio y Procedimiento</label>
+                    <textarea
+                      rows="3"
+                      placeholder="Detalles de la técnica, productos aplicados y alcance de la intervención..."
+                      value={formData.description || ''}
+                      onChange={e => setFormData({ ...formData, description: e.target.value })}
+                      style={{ width: '100%', padding: '9px 12px', border: '1px solid #cbd5e1', borderRadius: '8px', marginTop: '4px' }}
+                    />
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <input
+                      type="checkbox"
+                      id="tiw_act"
+                      checked={Boolean(formData.is_active)}
+                      onChange={e => setFormData({ ...formData, is_active: e.target.checked })}
+                    />
+                    <label htmlFor="tiw_act" style={{ fontSize: '0.85rem', fontWeight: '700', color: '#0f172a' }}>Servicio Activo</label>
                   </div>
                 </>
               )}

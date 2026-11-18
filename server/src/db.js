@@ -457,6 +457,70 @@ const INITIAL_TAXES = [
   }
 ];
 
+// Tipos de Intervención Wash (XX_TipoIntervencionWash en iDempiere ERP)
+const INITIAL_TIPOS_INTERVENCION_WASH = [
+  {
+    id: 1,
+    value: 'TIW-001',
+    name: 'Lavado Exterior Express',
+    description: 'Lavado exterior a presión con espuma activa de alta densidad, desengrasado de llantas y secado con microfibra manual.',
+    category: 'Lavado Express',
+    duration_minutes: 30,
+    price_std: 25.00,
+    is_active: 1
+  },
+  {
+    id: 2,
+    value: 'TIW-002',
+    name: 'Lavado Integral Premium',
+    description: 'Lavado de carrocería, pasos de rueda, aspirado profundo de cabina y maletera, y desinfección de ductos con ozono.',
+    category: 'Lavado Integral',
+    duration_minutes: 60,
+    price_std: 45.00,
+    is_active: 1
+  },
+  {
+    id: 3,
+    value: 'TIW-003',
+    name: 'Desinfección & Lavado Chasis',
+    description: 'Lavado técnico del chasis inferior a alta temperatura y descontaminación férrica de partes mecánicas bajas.',
+    category: 'Lavado Técnico',
+    duration_minutes: 45,
+    price_std: 40.00,
+    is_active: 1
+  },
+  {
+    id: 4,
+    value: 'TIW-004',
+    name: 'Lavado de Motor a Vapor',
+    description: 'Limpieza profunda de vano motor con vapor seco desengrasante y acondicionador térmico de plásticos y gomas ignífugo.',
+    category: 'Motor & Detailing',
+    duration_minutes: 50,
+    price_std: 55.00,
+    is_active: 1
+  },
+  {
+    id: 5,
+    value: 'TIW-005',
+    name: 'Detailing & Pulido Interior',
+    description: 'Limpieza y nutrición de tapicería cuero/tela con vapor a 140°C, protección UV satinada para tablero, molduras y consolas.',
+    category: 'Detailing',
+    duration_minutes: 90,
+    price_std: 85.00,
+    is_active: 1
+  },
+  {
+    id: 6,
+    value: 'TIW-006',
+    name: 'Tratamiento Cerámico Hidrofóbico',
+    description: 'Sellado de pintura con nano-cerámica 9H, máxima repelencia de agua, brillo espejo profundo y protección contra micro-rayas.',
+    category: 'Tratamiento Especial',
+    duration_minutes: 120,
+    price_std: 150.00,
+    is_active: 1
+  }
+];
+
 // Órdenes Iniciales
 const INITIAL_ORDERS = [
   {
@@ -763,6 +827,23 @@ class DatabaseManager {
         created_at TEXT DEFAULT (datetime('now'))
       );
     `);
+
+    // 11. Tipos de Intervención Wash (XX_TipoIntervencionWash en ERP)
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS tipo_intervencion_wash (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        idempiere_id INTEGER UNIQUE,
+        value TEXT NOT NULL UNIQUE,
+        name TEXT NOT NULL,
+        description TEXT,
+        category TEXT NOT NULL DEFAULT 'Lavado Estándar',
+        duration_minutes INTEGER NOT NULL DEFAULT 45,
+        price_std REAL NOT NULL DEFAULT 25.0,
+        is_active INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now'))
+      );
+    `);
   }
 
   seedInitialData() {
@@ -910,6 +991,18 @@ class DatabaseManager {
           o.address || '',
           o.createdAt
         );
+      }
+    }
+
+    // Seed Tipos de Intervención Wash (XX_TipoIntervencionWash)
+    const tiwCount = db.prepare('SELECT COUNT(*) as c FROM tipo_intervencion_wash').get().c;
+    if (tiwCount === 0) {
+      const insTiw = db.prepare(`
+        INSERT INTO tipo_intervencion_wash (id, value, name, description, category, duration_minutes, price_std, is_active)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      for (const t of INITIAL_TIPOS_INTERVENCION_WASH) {
+        insTiw.run(t.id, t.value, t.name, t.description, t.category, t.duration_minutes, t.price_std, t.is_active);
       }
     }
   }
@@ -1532,6 +1625,88 @@ class DatabaseManager {
   }
 
   // ==========================================
+  // 6.b. TIPOS DE INTERVENCIÓN WASH (Mantenible)
+  // ==========================================
+  getTiposIntervencionWash() {
+    this.initDB();
+    const rows = this.sqliteDb.prepare('SELECT * FROM tipo_intervencion_wash ORDER BY id ASC').all();
+    return rows.map(r => ({
+      ...r,
+      duration_minutes: parseInt(r.duration_minutes || 0, 10),
+      price_std: parseFloat(r.price_std || 0),
+      is_active: Boolean(r.is_active)
+    }));
+  }
+
+  getTipoIntervencionWashById(id) {
+    this.initDB();
+    const row = this.sqliteDb.prepare('SELECT * FROM tipo_intervencion_wash WHERE id = ?').get(Number(id));
+    if (!row) return null;
+    return {
+      ...row,
+      duration_minutes: parseInt(row.duration_minutes || 0, 10),
+      price_std: parseFloat(row.price_std || 0),
+      is_active: Boolean(row.is_active)
+    };
+  }
+
+  addTipoIntervencionWash(data) {
+    this.initDB();
+    const value = data.value || `TIW-${String(Date.now()).slice(-4)}`;
+    const category = data.category || 'Lavado Estándar';
+    const durationMinutes = parseInt(data.duration_minutes || 45, 10);
+    const priceStd = parseFloat(data.price_std || 25.0);
+    const isActive = data.is_active === false ? 0 : 1;
+
+    const res = this.sqliteDb.prepare(`
+      INSERT INTO tipo_intervencion_wash (idempiere_id, value, name, description, category, duration_minutes, price_std, is_active, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+    `).run(
+      data.idempiere_id || null,
+      value,
+      data.name,
+      data.description || '',
+      category,
+      durationMinutes,
+      priceStd,
+      isActive
+    );
+
+    return this.getTipoIntervencionWashById(res.lastInsertRowid);
+  }
+
+  updateTipoIntervencionWash(id, data) {
+    this.initDB();
+    const existing = this.getTipoIntervencionWashById(id);
+    if (!existing) return null;
+
+    this.sqliteDb.prepare(`
+      UPDATE tipo_intervencion_wash
+      SET name = ?, value = ?, description = ?, category = ?, duration_minutes = ?, price_std = ?, is_active = ?, updated_at = datetime('now')
+      WHERE id = ?
+    `).run(
+      data.name ?? existing.name,
+      data.value ?? existing.value,
+      data.description ?? existing.description,
+      data.category ?? existing.category,
+      data.duration_minutes !== undefined ? parseInt(data.duration_minutes, 10) : existing.duration_minutes,
+      data.price_std !== undefined ? parseFloat(data.price_std) : existing.price_std,
+      data.is_active !== undefined ? (data.is_active ? 1 : 0) : (existing.is_active ? 1 : 0),
+      Number(id)
+    );
+
+    return this.getTipoIntervencionWashById(id);
+  }
+
+  deleteTipoIntervencionWash(id) {
+    this.initDB();
+    const existing = this.getTipoIntervencionWashById(id);
+    if (!existing) return false;
+    this.sqliteDb.prepare('DELETE FROM tipo_intervencion_wash WHERE id = ?').run(Number(id));
+    return true;
+  }
+
+  // ==========================================
   // 7. BANDEJA DE PEDIDOS & MÉTRICAS
   // ==========================================
   getOrders(origin = 'all') {
@@ -1912,6 +2087,45 @@ class DatabaseManager {
     return { success: true, count: synced, taxes: this.getTaxes() };
   }
 
+  syncTiposIntervencionWashFromERP(records, source = 'iDempiere REST v1') {
+    this.initDB();
+    const db = this.sqliteDb;
+    let synced = 0;
+
+    const upsert = db.prepare(`
+      INSERT INTO tipo_intervencion_wash (idempiere_id, value, name, description, category, duration_minutes, price_std, is_active, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+      ON CONFLICT(value) DO UPDATE SET
+        idempiere_id = excluded.idempiere_id,
+        name = excluded.name,
+        description = excluded.description,
+        category = excluded.category,
+        duration_minutes = excluded.duration_minutes,
+        price_std = excluded.price_std,
+        is_active = excluded.is_active,
+        updated_at = datetime('now')
+    `);
+
+    for (const r of records) {
+      const idempiereId = r.XX_TipoIntervencionWash_ID ?? r.id ?? null;
+      const value = r.Value ?? r.value ?? `TIW-${idempiereId}`;
+      const name = r.Name ?? r.name;
+      const desc = r.Description ?? r.description ?? '';
+      const category = r.Category ?? r.category ?? 'Lavado Estándar';
+      const durationMinutes = parseInt(r.DurationMinutes ?? r.duration_minutes ?? 45, 10);
+      const priceStd = parseFloat(r.PriceStd ?? r.price_std ?? 25.0);
+      const isActive = r.IsActive !== undefined ? (r.IsActive ? 1 : 0) : 1;
+
+      if (name) {
+        upsert.run(idempiereId, value, name, desc, category, durationMinutes, priceStd, isActive);
+        synced++;
+      }
+    }
+
+    this.recordSyncEvent('Tipos Intervención Wash', synced, 'Exitoso', source, `Sincronizados ${synced} tipos de intervención wash desde ERP`);
+    return { success: true, count: synced, tipos: this.getTiposIntervencionWash() };
+  }
+
   // ==========================================
   // 9. ESTADO Y MONITOREO DE BASE DE DATOS
   // ==========================================
@@ -1934,6 +2148,7 @@ class DatabaseManager {
       customerCategories: this.sqliteDb.prepare('SELECT COUNT(*) as c FROM customer_categories').get().c,
       customers: this.sqliteDb.prepare('SELECT COUNT(*) as c FROM customers').get().c,
       taxes: this.sqliteDb.prepare('SELECT COUNT(*) as c FROM taxes').get().c,
+      tipoIntervencionWash: this.sqliteDb.prepare('SELECT COUNT(*) as c FROM tipo_intervencion_wash').get().c,
       orders: this.sqliteDb.prepare('SELECT COUNT(*) as c FROM orders').get().c,
       syncEvents: this.sqliteDb.prepare('SELECT COUNT(*) as c FROM sync_history').get().c
     };
@@ -2014,6 +2229,12 @@ module.exports = {
   getTaxes: () => dbManager.getTaxes(),
   getTaxById: (id) => dbManager.getTaxById(id),
 
+  getTiposIntervencionWash: () => dbManager.getTiposIntervencionWash(),
+  getTipoIntervencionWashById: (id) => dbManager.getTipoIntervencionWashById(id),
+  addTipoIntervencionWash: (data) => dbManager.addTipoIntervencionWash(data),
+  updateTipoIntervencionWash: (id, data) => dbManager.updateTipoIntervencionWash(id, data),
+  deleteTipoIntervencionWash: (id) => dbManager.deleteTipoIntervencionWash(id),
+
   getOrders: (origin) => dbManager.getOrders(origin),
   getOrderById: (id) => dbManager.getOrderById(id),
   createOrder: (o) => dbManager.createOrder(o),
@@ -2026,6 +2247,7 @@ module.exports = {
   syncCustomerCategoriesFromERP: (recs, src) => dbManager.syncCustomerCategoriesFromERP(recs, src),
   syncCustomersFromERP: (recs, src) => dbManager.syncCustomersFromERP(recs, src),
   syncTaxesFromERP: (recs, src) => dbManager.syncTaxesFromERP(recs, src),
+  syncTiposIntervencionWashFromERP: (recs, src) => dbManager.syncTiposIntervencionWashFromERP(recs, src),
   getSyncHistory: (lim) => dbManager.getSyncHistory(lim),
   recordSyncEvent: (cat, cnt, st, src, det) => dbManager.recordSyncEvent(cat, cnt, st, src, det),
 
