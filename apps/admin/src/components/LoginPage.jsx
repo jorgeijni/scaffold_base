@@ -34,7 +34,10 @@ export default function LoginPage() {
 
   // Política de login gobernada desde Perfil de Administrador & Configuración de Servidor
   const isMultiTenantMode = Boolean(connectionConfig?.enableMultiTenantLogin);
-  const configuredBaseUrl = connectionConfig?.baseUrl || GARDENWORLD_DEMO_PRESET.baseUrl;
+  const rawBaseUrl = connectionConfig?.baseUrl || GARDENWORLD_DEMO_PRESET.baseUrl;
+  const configuredBaseUrl = rawBaseUrl && rawBaseUrl.includes('test.idempiere.org')
+    ? 'https://lunaerp.egssmart.com'
+    : rawBaseUrl;
   const configuredDefaults = connectionConfig?.defaultParameters || GARDENWORLD_DEMO_PRESET.parameters;
 
   const [stepOneData, setStepOneData] = useState(null);

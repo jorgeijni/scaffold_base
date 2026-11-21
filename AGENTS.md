@@ -127,6 +127,7 @@ npm start
   - Vista técnica ERP ([`IdempiereErpView.jsx`](apps/admin/src/components/IdempiereErpView.jsx)) e Inspector modal Bearer ([`ErpStatusModal.jsx`](apps/admin/src/components/ErpStatusModal.jsx)).
   - Vista de Perfil & Configuración ([`ProfileErpSettingsView.jsx`](apps/admin/src/components/ProfileErpSettingsView.jsx)) con control de modo login (1 paso / 2 pasos), URL corporativa (`https://lunaerp.egssmart.com`), Proxy CORS y parámetros por defecto (`es_PE`).
   - Pantalla de Login pública white-label ([`LoginPage.jsx`](apps/admin/src/components/LoginPage.jsx)) sin menciones visibles a infraestructura interna ni iDempiere.
+  - **Resiliencia ante Caídas del Servidor Comunitario (Auto-sanación Error 502)**: Reescritura transparente en `/api/idempiere/proxy` y auto-sanación en cliente (`AuthService.loadConnectionConfig` / `LoginPage.jsx`) que detectan y migran de inmediato cualquier URL remota a `test.idempiere.org` hacia `https://lunaerp.egssmart.com`, garantizando disponibilidad ininterrumpida frente a caídas del entorno demo público.
 - **Base de Datos & Backend**:
   - MySQL descartado en favor de SQLite 3 (`node:sqlite`), sin dependencias nativas externas, almacenamiento persistente en `server/data/database.sqlite` y volumen Docker `/app/server/data`.
   - Endpoints CRUD para los 6 catálogos mantenibles y solo lectura para impuestos en [`server/src/routes/api.js`](server/src/routes/api.js).

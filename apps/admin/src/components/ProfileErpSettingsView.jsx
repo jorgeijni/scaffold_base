@@ -38,9 +38,10 @@ export default function ProfileErpSettingsView({ onOpenInspector, onCatalogSynce
 
   const initialDefaults = connectionConfig?.defaultParameters || GARDENWORLD_DEMO_PRESET.parameters;
 
-  const [baseUrlInput, setBaseUrlInput] = useState(
-    connectionConfig?.baseUrl || erpBaseUrl || GARDENWORLD_DEMO_PRESET.baseUrl
-  );
+  const [baseUrlInput, setBaseUrlInput] = useState(() => {
+    const raw = connectionConfig?.baseUrl || erpBaseUrl || GARDENWORLD_DEMO_PRESET.baseUrl;
+    return raw && raw.includes('test.idempiere.org') ? 'https://lunaerp.egssmart.com' : raw;
+  });
   const [proxyEnabled, setProxyEnabled] = useState(Boolean(corsProxyEnabled));
   const [proxyMode, setProxyMode] = useState(corsProxyMode || CORS_PROXY_PRESETS.LOCAL);
   const [customProxyUrl, setCustomProxyUrl] = useState(corsProxyCustomUrl || 'https://corsproxy.io/?');

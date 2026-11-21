@@ -34,6 +34,11 @@ router.all('/proxy', async (req, res) => {
     });
   }
 
+  // Redireccionar automáticamente servidores comunitarios caídos (test.idempiere.org) hacia lunaerp
+  if (targetUrl.includes('test.idempiere.org')) {
+    targetUrl = targetUrl.replace(/https?:\/\/test\.idempiere\.org(:443)?/i, 'https://lunaerp.egssmart.com');
+  }
+
   // Si otros parámetros de query fueron separados por Express / proxies intermediarios, re-adjuntarlos a targetUrl
   if (req.query && Object.keys(req.query).length > 1) {
     const extraParams = { ...req.query };

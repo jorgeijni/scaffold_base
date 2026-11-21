@@ -184,11 +184,12 @@ La barra lateral ([`AdminSidebar.jsx`](apps/admin/src/components/AdminSidebar.js
 | :--- | :--- | :--- | :--- |
 | `GET` | `/api/health` | Estado del backend y métricas de SQLite | Lectura |
 | `GET` | `/api/db/ping` | Medición de latencia de consulta en SQLite | Lectura |
-| `GET/POST` | `/api/categories` | Listar y crear categorías de productos | **Mantenible** |
-| `GET/PUT/DELETE` | `/api/categories/:id` | Obtener, editar o eliminar categoría | **Mantenible** |
-| `GET/POST` | `/api/products` | Listar y crear productos en SQLite | **Mantenible** |
-| `GET/PUT/DELETE` | `/api/products/:id` | Obtener, actualizar o eliminar producto | **Mantenible** |
-| `PATCH` | `/api/products/:id/toggle` | Alternar disponibilidad (`isAvailable`) | **Mantenible** |
+| `GET` | `/api/categories` | Listar categorías de productos (Single Source of Truth en ERP) | **Solo Lectura** |
+| `POST/PUT/DELETE` | `/api/categories/:id?` | Mutaciones manuales deshabilitadas (retorna `405 Method Not Allowed`) | **Bloqueado** |
+| `GET` | `/api/products` | Listar catálogo de productos sincronizado desde ERP | **Solo Lectura** |
+| `GET` | `/api/products/:id` | Detalle de producto | **Solo Lectura** |
+| `POST/PUT/DELETE` | `/api/products/:id?` | Mutaciones manuales deshabilitadas (retorna `405 Method Not Allowed`) | **Bloqueado** |
+| `PATCH` | `/api/products/:id/toggle` | Alternar disponibilidad local (`isAvailable`) | Transaccional |
 | `POST` | `/api/reset` | Restaura catálogo de productos inicial | Sistema |
 | `GET/POST` | `/api/pricelists` | Listar y crear listas de precios | **Mantenible** |
 | `GET/PUT/DELETE` | `/api/pricelists/:id` | Obtener, actualizar o eliminar lista de precios | **Mantenible** |
@@ -241,7 +242,11 @@ El motor relacional utiliza `node:sqlite` nativo (sin compilaciones C++ externas
 - **Variables de Entorno**:
   - `PORT`: Puerto HTTP (por defecto `3000`).
   - `SQLITE_DB_PATH`: Ruta al archivo SQLite (por defecto `server/data/database.sqlite`).
-  - `IDEMPIERE_BASE_URL`: URL del ERP iDempiere (por defecto `https://test.idempiere.org:443`).
+  - `IDEMPIERE_BASE_URL`: URL del ERP iDempiere (por defecto `https://lunaerp.egssmart.com`).
+
+- **Resiliencia de Proxy CORS y Auto-Sanación de URL (Prevención de Error 502)**:
+  - En `/api/idempiere/proxy`, cualquier petición dirigida a servidores comunitarios caídos (`test.idempiere.org`) es interceptada y reescrita al vuelo hacia `https://lunaerp.egssmart.com`.
+  - En `AuthService.js` y `LoginPage.jsx`, las URLs persistidas en el `localStorage` del cliente que apunten a `test.idempiere.org` se actualizan automáticamente hacia `https://lunaerp.egssmart.com` evitando rechazos de red o respuestas `502 Bad Gateway`.
 
 ---
 

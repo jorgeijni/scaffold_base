@@ -18,10 +18,14 @@ class IdempiereService {
   }
 
   normalizeBaseUrl(url) {
-    if (!url || typeof url !== 'string' || url.trim() === '') {
+    if (!url || typeof url !== 'string' || url.trim() === '' || url.includes('test.idempiere.org')) {
       return this.defaultBaseUrl;
     }
-    return url.trim().replace(/\/+$/, '');
+    const cleaned = url.trim().replace(/\/+$/, '');
+    if (cleaned.includes('test.idempiere.org')) {
+      return this.defaultBaseUrl;
+    }
+    return cleaned;
   }
 
   decodeJwtClaims(token) {

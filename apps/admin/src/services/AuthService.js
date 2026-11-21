@@ -90,10 +90,13 @@ export class AuthService {
   // Configuración de Conectividad (Base URL + Proxy CORS)
   // =========================================================================
   normalizeBaseUrl(url) {
-    if (!url || typeof url !== 'string' || !url.trim()) {
+    if (!url || typeof url !== 'string' || !url.trim() || url.includes('test.idempiere.org')) {
       return GARDENWORLD_DEMO_PRESET.baseUrl;
     }
     let cleaned = url.trim().replace(/\/+$/, '');
+    if (cleaned.includes('test.idempiere.org')) {
+      return GARDENWORLD_DEMO_PRESET.baseUrl;
+    }
     if (!/^https?:\/\//i.test(cleaned)) {
       const isLocal = /^(localhost|127\.0\.0\.1)(:|\/|$)/i.test(cleaned);
       cleaned = `${isLocal ? 'http' : 'https'}://${cleaned}`;
@@ -106,15 +109,23 @@ export class AuthService {
       const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(this.configStorageKey) : null;
       if (raw) {
         const parsed = JSON.parse(raw);
-        return {
+        const resolvedBaseUrl = this.normalizeBaseUrl(parsed.baseUrl || defaults.baseUrl);
+        const nextConfig = {
           ...defaults,
           ...parsed,
-          baseUrl: this.normalizeBaseUrl(parsed.baseUrl || defaults.baseUrl),
+          baseUrl: resolvedBaseUrl,
           defaultParameters: {
             ...(defaults.defaultParameters || {}),
             ...(parsed.defaultParameters || {})
           }
         };
+        // Auto-sanar localStorage si contenía el servidor test.idempiere.org que está caído
+        if (parsed.baseUrl && parsed.baseUrl.includes('test.idempiere.org')) {
+          try {
+            localStorage.setItem(this.configStorageKey, JSON.stringify(nextConfig));
+          } catch {}
+        }
+        return nextConfig;
       }
     } catch {
       // Ignorar errores de almacenamiento corrupto
