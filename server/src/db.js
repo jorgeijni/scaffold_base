@@ -1878,6 +1878,13 @@ class DatabaseManager {
     `).all(limit);
   }
 
+  clearProducts() {
+    this.initDB();
+    this.sqliteDb.prepare('DELETE FROM product_prices').run();
+    this.sqliteDb.prepare('DELETE FROM products').run();
+    return true;
+  }
+
   syncProductCategoriesFromERP(records, source = 'iDempiere REST v1') {
     this.initDB();
     const db = this.sqliteDb;
@@ -1907,44 +1914,81 @@ class DatabaseManager {
       }
     }
 
-    this.recordSyncEvent('Categorías de Productos', synced, 'Exitoso', source, `Sincronizadas ${synced} categorías desde ERP`);
+    this.recordSyncEvent('Categorías de Productos (Solo Lectura)', synced, 'Exitoso', source, `Sincronizadas ${synced} categorías desde ERP`);
     return { success: true, count: synced, categories: this.getProductCategories() };
   }
 
-  syncProductsFromERP(records, source = 'iDempiere REST v1') {
+  syncProductsFromERP(records, source = 'iDempiere REST v1', pricesMap = {}) {
     this.initDB();
     const db = this.sqliteDb;
     let synced = 0;
 
     const upsert = db.prepare(`
-      INSERT INTO products (idempiere_id, value, name, category, price, stock, isAvailable, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
+      INSERT INTO products (idempiere_id, value, name, category_id, category, price, stock, specialty, badgeColor, calories, image, description, isAvailable, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
       ON CONFLICT(value) DO UPDATE SET
         idempiere_id = excluded.idempiere_id,
         name = excluded.name,
+        category_id = COALESCE(excluded.category_id, products.category_id),
         category = COALESCE(excluded.category, products.category),
         price = CASE WHEN excluded.price > 0 THEN excluded.price ELSE products.price END,
         stock = CASE WHEN excluded.stock >= 0 THEN excluded.stock ELSE products.stock END,
+        specialty = COALESCE(excluded.specialty, products.specialty),
+        description = COALESCE(excluded.description, products.description),
         isAvailable = excluded.isAvailable,
         updated_at = datetime('now')
     `);
 
-    for (const r of records) {
+    // Mapa de categorías locales para vincular category_id
+    const cats = this.getProductCategories();
+    const catMap = new Map();
+    for (const c of cats) {
+      if (c.idempiere_id) catMap.set(`id:${c.idempiere_id}`, c.id);
+      if (c.name) catMap.set(`name:${c.name.toLowerCase().trim()}`, c.id);
+      if (c.value) catMap.set(`value:${c.value.toLowerCase().trim()}`, c.id);
+    }
+
+    const defaultImages = [
+      'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=800&auto=format&fit=crop&q=80',
+      'https://images.unsplash.com/photo-1550547660-d9450f859349?w=800&auto=format&fit=crop&q=80',
+      'https://images.unsplash.com/photo-1586190848861-99aa4a171e90?w=800&auto=format&fit=crop&q=80',
+      'https://images.unsplash.com/photo-1571091718767-18b5b1457add?w=800&auto=format&fit=crop&q=80',
+      'https://images.unsplash.com/photo-1582196016295-f8c8bd4b3e99?w=800&auto=format&fit=crop&q=80'
+    ];
+
+    for (let i = 0; i < records.length; i++) {
+      const r = records[i];
       const idempiereId = r.M_Product_ID ?? r.id ?? null;
       const value = r.Value ?? r.value ?? `HR-BUR-${idempiereId}`;
       const name = r.Name ?? r.name;
-      const price = parseFloat(r.PriceStd ?? r.price ?? 0);
-      const stock = parseInt(r.QtyOnHand ?? r.stock ?? 30, 10);
+      const erpPrice = parseFloat(r.PriceStd ?? r.price ?? (idempiereId && pricesMap[idempiereId] ? pricesMap[idempiereId] : 0));
+      const price = erpPrice > 0 ? erpPrice : 14.50;
+      const stock = parseInt(r.QtyOnHand ?? r.stock ?? 35, 10);
       const isAvailable = r.IsActive !== undefined ? (r.IsActive ? 1 : 0) : 1;
-      const category = r.CategoryName ?? r.category ?? 'Especiales';
+      
+      const rawCatName = r.CategoryName ?? r.category ?? (r.M_Product_Category_ID?.identifier ? r.M_Product_Category_ID.identifier.trim() : 'General');
+      const catIdFromErp = r.M_Product_Category_ID?.id ?? (typeof r.M_Product_Category_ID === 'number' ? r.M_Product_Category_ID : null);
+      
+      let localCategoryId = null;
+      if (catIdFromErp && catMap.has(`id:${catIdFromErp}`)) {
+        localCategoryId = catMap.get(`id:${catIdFromErp}`);
+      } else if (rawCatName && catMap.has(`name:${rawCatName.toLowerCase().trim()}`)) {
+        localCategoryId = catMap.get(`name:${rawCatName.toLowerCase().trim()}`);
+      }
+
+      const specialty = r.Description ? r.Description.substring(0, 50) : 'Catálogo Oficial ERP';
+      const badgeColor = '#ea580c';
+      const calories = '750 kcal';
+      const image = r.image || defaultImages[i % defaultImages.length];
+      const description = r.Description || `${name} - Producto oficial sincronizado desde iDempiere ERP.`;
 
       if (name) {
-        upsert.run(idempiereId, value, name, category, price, stock, isAvailable);
+        upsert.run(idempiereId, value, name, localCategoryId, rawCatName, price, stock, specialty, badgeColor, calories, image, description, isAvailable);
         synced++;
       }
     }
 
-    this.recordSyncEvent('Productos', synced, 'Exitoso', source, `Sincronizados ${synced} productos desde ERP`);
+    this.recordSyncEvent('Productos (Solo Lectura)', synced, 'Exitoso', source, `Sincronizados ${synced} productos desde ERP`);
     return { success: true, count: synced, products: this.getProducts() };
   }
 
@@ -2196,6 +2240,7 @@ module.exports = {
   updateProduct: (id, p) => dbManager.updateProduct(id, p),
   toggleProductAvailability: (id) => dbManager.toggleProductAvailability(id),
   deleteProduct: (id) => dbManager.deleteProduct(id),
+  clearProducts: () => dbManager.clearProducts(),
   resetProducts: () => dbManager.resetProducts(),
 
   getProductCategories: () => dbManager.getProductCategories(),

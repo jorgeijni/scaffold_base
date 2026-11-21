@@ -76,15 +76,15 @@ Tanto en [`apps/admin/src/services/AuthService.js`](apps/admin/src/services/Auth
   - Mantener la modularidad por vistas/componentes en `apps/admin/src/components/` (`AdminSidebar`, `MasterCatalogsView`, `OrdersInbox`, `IdempiereErpView`, `ErpStatusModal`, `ProfileErpSettingsView`, `LoginPage`, `TwoStepContextForm`, `AuthGuard`).
 - **`server`**:
   - **Descarte de MySQL & Adopción de SQLite**: El backend utiliza el motor relacional SQLite 3 integrado en Node.js (`node:sqlite`) con persistencia en `server/data/database.sqlite` (configurable vía `SQLITE_DB_PATH`), modo WAL (Write-Ahead Logging) y claves foráneas activas. En Docker se expone el volumen persistente `/app/server/data`.
-  - **7 Catálogos Maestros ERP**:
-    1. Categorías de productos (`product_categories`, `M_Product_Category`): CRUD mantenible + sync ERP.
-    2. Catálogo de productos (`products`, `M_Product`): CRUD mantenible + sync ERP.
+  - **7 Catálogos Maestros ERP (Gobernanza y Sincronización)**:
+    1. Categorías de productos (`product_categories`, `M_Product_Category`): **Solo lectura en App / Single Source of Truth en iDempiere ERP**. Mutaciones manuales en API devuelven `405 Method Not Allowed`. Sincronizable unidireccionalmente vía `POST /api/idempiere/sync/categories`.
+    2. Catálogo de productos (`products`, `M_Product`): **Solo lectura en App / Single Source of Truth en iDempiere ERP**. Mutaciones manuales en API devuelven `405 Method Not Allowed`. Sincronizable unidireccionalmente vía `POST /api/idempiere/sync/products`.
     3. Catálogo de precios (`price_lists`, `price_list_versions`, `product_prices`, `M_PriceList`): CRUD mantenible + sync ERP.
     4. Categorías de clientes (`customer_categories`, `C_BP_Group`): CRUD mantenible + sync ERP.
     5. Catálogo de clientes (`customers`, `C_BPartner`): CRUD mantenible + sync ERP.
     6. Tipos de Intervención Wash (`tipo_intervencion_wash`, `XX_TipoIntervencionWash`): CRUD mantenible + sync ERP.
     7. Catálogo de impuestos (`taxes`, `C_Tax`): **Solo lectura**, sin mutaciones manuales en UI, sincronizable desde ERP.
-  - Al agregar métodos en `server/src/db.js`, verificar los exports en `module.exports` (por ejemplo `db.getProducts()`, `db.getProductCategories()`, `db.getTiposIntervencionWash()`, etc.).
+  - Al agregar métodos en `server/src/db.js`, verificar los exports en `module.exports` (por ejemplo `db.getProducts()`, `db.clearProducts()`, `db.getProductCategories()`, `db.getTiposIntervencionWash()`, etc.).
 
 ---
 
@@ -117,12 +117,15 @@ npm start
 - **PWA Móvil**: 5 pestañas funcionales, categorías sincronizadas dinámicamente con `/api/products`, carrito con cupones y seguimiento de órdenes, Service Worker `nextcollege-pwa-v2`.
 - **Panel Admin**:
   - Layout con barra lateral colapsable dinámica [`AdminSidebar.jsx`](apps/admin/src/components/AdminSidebar.jsx): soporta dos modos con transición fluida (`240px` expandido y `68px` colapsado con persistencia en `localStorage`), replicando la estructura de `referencias/nav-bar-abierto.html`, logo verde neón `#bef227` con glifo `< >`, iconos exactos Phosphor/Lucide, indicador activo tipo pastilla blanca con icono en caja negra, y avatar inferior con inicial `J` y distintivo `A`.
-  - **Módulo de Catálogos Maestros ERP** ([`MasterCatalogsView.jsx`](apps/admin/src/components/MasterCatalogsView.jsx)): navegación por pestañas para los 7 catálogos maestros sincronizables con iDempiere ERP (6 mantenibles con creación, edición, borrado y ajuste de precios + 1 de solo lectura para Impuestos `C_Tax`), sincronización individual o total (`POST /api/idempiere/sync/*`).
+  - **Módulo de Catálogos Maestros ERP** ([`MasterCatalogsView.jsx`](apps/admin/src/components/MasterCatalogsView.jsx)): navegación por pestañas para los 7 catálogos maestros sincronizables con iDempiere ERP (4 mantenibles + 3 de solo lectura con gobernanza exclusiva en ERP para Impuestos `C_Tax`, Categorías `M_Product_Category` y Productos `M_Product`). Sincronización individual o total (`POST /api/idempiere/sync/*`).
+  - **Gobernanza Unidireccional de Productos y Categorías**: `M_Product` y `M_Product_Category` operan con iDempiere como única fuente de la verdad. Toda creación, edición o borrado manual en UI/API se encuentra deshabilitada (`405 Method Not Allowed`). Se sincronizan e importan en vivo desde el ERP.
+  - **Poblado de Base de Datos SQLite**: Catálogo depurado y alimentado directamente con los 55 productos reales y 14 categorías maestras de `https://lunaerp.egssmart.com`.
+  - **Autenticación en 2 Pasos con Cascada Dinámica**: Selector multitenant en [`TwoStepContextForm.jsx`](apps/admin/src/components/TwoStepContextForm.jsx) con actualización reactiva en cascada entre Empresa -> Rol -> Organización -> Almacén, seleccionando por defecto organizaciones operacionales con almacenes asignados y preservando parámetros en el proxy CORS `/api/idempiere/proxy`.
   - Entidad **`TipoIntervencionWash`** (`tipo_intervencion_wash` / `XX_TipoIntervencionWash`): catálogo de intervenciones de lavado y detallado con tarifas estándar, duración en minutos, categorías de servicio, CRUD completo y sincronización ERP.
   - Bandeja central de pedidos de 3 capas ([`OrdersInbox.jsx`](apps/admin/src/components/OrdersInbox.jsx)) con filtros PWA vs E-commerce y sincronización `C_Order`.
   - Monitor de Base de Datos SQLite con inspección de modo WAL, tamaño de archivo en disco, claves foráneas, latencia en ms y conteo de entidades en las tablas maestras (incluyendo `tipoIntervencionWash`).
   - Vista técnica ERP ([`IdempiereErpView.jsx`](apps/admin/src/components/IdempiereErpView.jsx)) e Inspector modal Bearer ([`ErpStatusModal.jsx`](apps/admin/src/components/ErpStatusModal.jsx)).
-  - Vista de Perfil & Configuración ([`ProfileErpSettingsView.jsx`](apps/admin/src/components/ProfileErpSettingsView.jsx)) con control de modo login (1 paso / 2 pasos), URL corporativa, Proxy CORS y parámetros por defecto (`es_PE`).
+  - Vista de Perfil & Configuración ([`ProfileErpSettingsView.jsx`](apps/admin/src/components/ProfileErpSettingsView.jsx)) con control de modo login (1 paso / 2 pasos), URL corporativa (`https://lunaerp.egssmart.com`), Proxy CORS y parámetros por defecto (`es_PE`).
   - Pantalla de Login pública white-label ([`LoginPage.jsx`](apps/admin/src/components/LoginPage.jsx)) sin menciones visibles a infraestructura interna ni iDempiere.
 - **Base de Datos & Backend**:
   - MySQL descartado en favor de SQLite 3 (`node:sqlite`), sin dependencias nativas externas, almacenamiento persistente en `server/data/database.sqlite` y volumen Docker `/app/server/data`.

@@ -43,20 +43,21 @@ export default function TwoStepContextForm({
 
     try {
       const nextRoles = await onFetchRoles(stepOneData.tempToken, parsedClient, connectionOverride);
-      setRoles(nextRoles);
-      const nextRoleId = nextRoles[0]?.id ?? '';
+      setRoles(nextRoles || []);
+      const nextRoleId = nextRoles?.[0]?.id ?? '';
       setRoleId(nextRoleId);
 
       if (nextRoleId !== '') {
         const nextOrgs = await onFetchOrganizations(stepOneData.tempToken, parsedClient, nextRoleId, connectionOverride);
-        setOrganizations(nextOrgs);
-        const nextOrgId = nextOrgs[0]?.id ?? '';
+        setOrganizations(nextOrgs || []);
+        const validOrg = (nextOrgs || []).find((o) => Number(o.id) !== 0) || nextOrgs?.[0];
+        const nextOrgId = validOrg?.id ?? '';
         setOrganizationId(nextOrgId);
 
         if (nextOrgId !== '') {
           const nextWhs = await onFetchWarehouses(stepOneData.tempToken, parsedClient, nextRoleId, nextOrgId, connectionOverride);
-          setWarehouses(nextWhs);
-          setWarehouseId(nextWhs[0]?.id ?? '');
+          setWarehouses(nextWhs || []);
+          setWarehouseId(nextWhs?.[0]?.id ?? '');
         } else {
           setWarehouses([]);
           setWarehouseId('');
@@ -82,14 +83,15 @@ export default function TwoStepContextForm({
 
     try {
       const nextOrgs = await onFetchOrganizations(stepOneData.tempToken, clientId, parsedRole, connectionOverride);
-      setOrganizations(nextOrgs);
-      const nextOrgId = nextOrgs[0]?.id ?? '';
+      setOrganizations(nextOrgs || []);
+      const validOrg = (nextOrgs || []).find((o) => Number(o.id) !== 0) || nextOrgs?.[0];
+      const nextOrgId = validOrg?.id ?? '';
       setOrganizationId(nextOrgId);
 
       if (nextOrgId !== '') {
         const nextWhs = await onFetchWarehouses(stepOneData.tempToken, clientId, parsedRole, nextOrgId, connectionOverride);
-        setWarehouses(nextWhs);
-        setWarehouseId(nextWhs[0]?.id ?? '');
+        setWarehouses(nextWhs || []);
+        setWarehouseId(nextWhs?.[0]?.id ?? '');
       } else {
         setWarehouses([]);
         setWarehouseId('');
@@ -108,11 +110,18 @@ export default function TwoStepContextForm({
     setCascadeError(null);
 
     try {
-      const nextWhs = await onFetchWarehouses(stepOneData.tempToken, clientId, roleId, parsedOrg, connectionOverride);
-      setWarehouses(nextWhs);
-      setWarehouseId(nextWhs[0]?.id ?? '');
+      if (nextOrgId !== '' && !Number.isNaN(parsedOrg)) {
+        const nextWhs = await onFetchWarehouses(stepOneData.tempToken, clientId, roleId, parsedOrg, connectionOverride);
+        setWarehouses(nextWhs || []);
+        setWarehouseId(nextWhs?.[0]?.id ?? '');
+      } else {
+        setWarehouses([]);
+        setWarehouseId('');
+      }
     } catch (err) {
       setCascadeError(err.message);
+      setWarehouses([]);
+      setWarehouseId('');
     } finally {
       setLoadingCascade(false);
     }
@@ -276,15 +285,18 @@ export default function TwoStepContextForm({
             className="login-input"
             value={warehouseId}
             onChange={(e) => setWarehouseId(e.target.value)}
-            disabled={loadingCascade}
+            disabled={loadingCascade || warehouses.length === 0}
             style={selectStyle}
           >
-            {warehouses.length === 0 && <option value="">Predeterminado</option>}
-            {warehouses.map((w) => (
-              <option key={w.id} value={w.id}>
-                {w.name}
-              </option>
-            ))}
+            {warehouses.length === 0 ? (
+              <option value="">Sin almacenes para esta sede</option>
+            ) : (
+              warehouses.map((w) => (
+                <option key={w.id} value={w.id}>
+                  {w.name}
+                </option>
+              ))
+            )}
           </select>
         </div>
       </div>

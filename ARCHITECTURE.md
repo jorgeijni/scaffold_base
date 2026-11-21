@@ -130,11 +130,11 @@ scaffold_base/
 #### Módulo de Catálogos Maestros ERP ([`MasterCatalogsView.jsx`](apps/admin/src/components/MasterCatalogsView.jsx))
 Navegación integrada por pestañas con soporte completo para sincronización con iDempiere ERP:
 1. 🏷️ **Categorías de Productos** (`M_Product_Category`):
-   - Mantenible: Creación, edición, eliminación lógica/física, listado con conteo de productos asociados.
-   - Sincronización ERP: `POST /api/idempiere/sync/categories`.
+   - **SOLO LECTURA (Single Source of Truth en iDempiere ERP)**: Bloqueado contra mutaciones manuales en interfaz y API (`405 Method Not Allowed`).
+   - Sincronización ERP: `POST /api/idempiere/sync/categories` importa las categorías oficiales en vivo desde el ERP.
 2. 🍔 **Catálogo de Productos** (`M_Product`):
-   - Mantenible: Creación, edición, pausa/activación de disponibilidad, control de stock y precio.
-   - Sincronización ERP: `POST /api/idempiere/sync/products`.
+   - **SOLO LECTURA (Single Source of Truth en iDempiere ERP)**: Bloqueado contra mutaciones manuales en interfaz y API (`405 Method Not Allowed`).
+   - Sincronización ERP: `POST /api/idempiere/sync/products` importa los productos y mapea precios vigentes (`M_ProductPrice`) directamente desde el ERP.
 3. 💲 **Catálogo de Precios (Listas y Versiones)** (`M_PriceList` / `M_PriceList_Version` / `M_ProductPrice`):
    - Mantenible: Creación y edición de listas de precios (marca de tarifa base, moneda `PEN`/`USD`), creación de versiones de lista vigentes por fecha y matriz editable de precios estándar y límites por producto.
    - Sincronización ERP: `POST /api/idempiere/sync/pricelists`.

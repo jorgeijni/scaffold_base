@@ -9,7 +9,7 @@
  * 5. Política de acceso: cualquier usuario con credenciales activas (200 OK + token válido) es autorizado.
  */
 
-const DEFAULT_BASE_URL = process.env.IDEMPIERE_BASE_URL || 'https://test.idempiere.org:443';
+const DEFAULT_BASE_URL = process.env.IDEMPIERE_BASE_URL || 'https://lunaerp.egssmart.com';
 const DEFAULT_TIMEOUT_MS = 10000;
 
 class IdempiereService {

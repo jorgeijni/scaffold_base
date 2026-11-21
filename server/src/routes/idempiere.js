@@ -25,13 +25,27 @@ function buildCatalogMappings(products) {
  * Proxy CORS local para pruebas en navegador contra servidores iDempiere
  */
 router.all('/proxy', async (req, res) => {
-  const targetUrl = req.query.url || req.headers['x-target-url'];
+  let targetUrl = req.query.url || req.headers['x-target-url'];
 
   if (!targetUrl || typeof targetUrl !== 'string') {
     return res.status(400).json({
       success: false,
       error: 'Parámetro "url" obligatorio para el proxy CORS de iDempiere.'
     });
+  }
+
+  // Si otros parámetros de query fueron separados por Express / proxies intermediarios, re-adjuntarlos a targetUrl
+  if (req.query && Object.keys(req.query).length > 1) {
+    const extraParams = { ...req.query };
+    delete extraParams.url;
+    const extraEntries = Object.entries(extraParams);
+    if (extraEntries.length > 0) {
+      const sep = targetUrl.includes('?') ? '&' : '?';
+      const queryString = extraEntries
+        .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+        .join('&');
+      targetUrl = `${targetUrl}${sep}${queryString}`;
+    }
   }
 
   let parsedUrl;
@@ -204,22 +218,69 @@ router.post('/logout', (req, res) => {
   });
 });
 
+// Helper genérico para autenticar contextualmente si no hay token o expiró
+async function getContextualizedErpToken(baseUrl) {
+  try {
+    const res = await fetch(`${baseUrl}/api/v1/auth/tokens`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify({
+        userName: 'GardenAdmin',
+        password: 'GardenAdmin',
+        parameters: { clientId: 11, roleId: 102, organizationId: 11, warehouseId: 103, language: 'en_US' }
+      })
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.token || null;
+  } catch {
+    return null;
+  }
+}
+
 // Helper genérico para consultar endpoints de iDempiere REST con timeout seguro
 async function fetchIdempiereModel(baseUrl, modelName, token) {
-  if (!baseUrl || !token) return null;
+  const targetBaseUrl = (baseUrl || 'https://lunaerp.egssmart.com').trim().replace(/\/+$/, '');
+  let authToken = token;
+
+  if (!authToken) {
+    authToken = await getContextualizedErpToken(targetBaseUrl);
+  }
+
+  if (!authToken) return null;
+
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 7000);
-    const endpoint = `${baseUrl}/api/v1/models/${modelName}?$top=50`;
-    const res = await fetch(endpoint, {
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    const endpoint = `${targetBaseUrl}/api/v1/models/${modelName}?$top=100`;
+    let res = await fetch(endpoint, {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
-        'Authorization': `Bearer ${token}`
+        'Authorization': `Bearer ${authToken}`
       },
       signal: controller.signal
     });
     clearTimeout(timeoutId);
+
+    // Si respondió 401 (token no contextualizado o vencido), reintentar con token nuevo contextualizado
+    if (res.status === 401) {
+      const freshToken = await getContextualizedErpToken(targetBaseUrl);
+      if (freshToken && freshToken !== authToken) {
+        const c2 = new AbortController();
+        const t2 = setTimeout(() => c2.abort(), 10000);
+        res = await fetch(endpoint, {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json',
+            'Authorization': `Bearer ${freshToken}`
+          },
+          signal: c2.signal
+        });
+        clearTimeout(t2);
+      }
+    }
+
     if (!res.ok) return null;
     const json = await res.json();
     return json.records || json || null;
@@ -238,11 +299,11 @@ async function fetchIdempiereModel(baseUrl, modelName, token) {
  */
 router.post('/sync/categories', async (req, res) => {
   try {
-    const baseUrl = (req.body.baseUrl || '').trim().replace(/\/+$/, '');
+    const baseUrl = (req.body.baseUrl || '').trim().replace(/\/+$/, '') || 'https://lunaerp.egssmart.com';
     const token = req.body.token || (req.headers.authorization || '').replace(/^Bearer\s+/, '');
 
     let remoteRecords = await fetchIdempiereModel(baseUrl, 'M_Product_Category', token);
-    let source = 'iDempiere REST v1 Live';
+    let source = 'iDempiere REST v1 Live (https://lunaerp.egssmart.com)';
 
     if (!remoteRecords || !Array.isArray(remoteRecords) || remoteRecords.length === 0) {
       source = 'Mapeo Estándar iDempiere ERP (GardenWorld)';
@@ -275,11 +336,22 @@ router.post('/sync/categories', async (req, res) => {
  */
 router.post('/sync/products', async (req, res) => {
   try {
-    const baseUrl = (req.body.baseUrl || '').trim().replace(/\/+$/, '');
+    const baseUrl = (req.body.baseUrl || '').trim().replace(/\/+$/, '') || 'https://lunaerp.egssmart.com';
     const token = req.body.token || (req.headers.authorization || '').replace(/^Bearer\s+/, '');
 
     let remoteRecords = await fetchIdempiereModel(baseUrl, 'M_Product', token);
-    let source = 'iDempiere REST v1 Live';
+    let pricesRecords = await fetchIdempiereModel(baseUrl, 'M_ProductPrice', token);
+    const pricesMap = {};
+    if (Array.isArray(pricesRecords)) {
+      for (const pr of pricesRecords) {
+        const prodId = pr.M_Product_ID?.id ?? pr.M_Product_ID;
+        if (prodId && pr.PriceStd !== undefined) {
+          pricesMap[prodId] = parseFloat(pr.PriceStd);
+        }
+      }
+    }
+
+    let source = 'iDempiere REST v1 Live (https://lunaerp.egssmart.com)';
 
     if (!remoteRecords || !Array.isArray(remoteRecords) || remoteRecords.length === 0) {
       source = 'Mapeo Estándar iDempiere ERP (GardenWorld)';
@@ -295,7 +367,7 @@ router.post('/sync/products', async (req, res) => {
       }));
     }
 
-    const syncResult = db.syncProductsFromERP(remoteRecords, source);
+    const syncResult = db.syncProductsFromERP(remoteRecords, source, pricesMap);
     res.json({
       success: true,
       catalog: 'Catálogo de Productos',

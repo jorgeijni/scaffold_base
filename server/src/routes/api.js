@@ -48,60 +48,65 @@ router.get('/products/:id', (req, res) => {
   }
 });
 
-router.post('/products', (req, res) => {
+// ==========================================
+// 1. PRODUCTOS (SOLO LECTURA - GOBERNADO POR IDEMPIERE ERP)
+// ==========================================
+router.get('/products', (req, res) => {
   try {
-    const { name, price } = req.body;
-    if (!name || price === undefined) {
-      return res.status(400).json({ success: false, error: 'Nombre y precio son requeridos.' });
-    }
-    const product = db.addProduct(req.body);
-    res.status(201).json({ success: true, message: 'Producto creado exitosamente en SQLite', data: product });
+    const products = db.getProducts();
+    res.json({ success: true, count: products.length, data: products });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
+});
+
+router.get('/products/:id', (req, res) => {
+  try {
+    const product = db.getProductById(req.params.id);
+    if (!product) return res.status(404).json({ success: false, error: 'Producto no encontrado' });
+    res.json({ success: true, data: product });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.post('/products', (req, res) => {
+  return res.status(405).json({
+    success: false,
+    error: 'El catálogo de productos es de solo lectura y se administra exclusivamente desde iDempiere ERP (M_Product). Operación no permitida.'
+  });
 });
 
 router.put('/products/:id', (req, res) => {
-  try {
-    const updated = db.updateProduct(req.params.id, req.body);
-    if (!updated) return res.status(404).json({ success: false, error: 'Producto no encontrado' });
-    res.json({ success: true, message: 'Producto actualizado exitosamente', data: updated });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
+  return res.status(405).json({
+    success: false,
+    error: 'El catálogo de productos es de solo lectura y se administra exclusivamente desde iDempiere ERP (M_Product). Operación no permitida.'
+  });
 });
 
 router.patch('/products/:id/toggle', (req, res) => {
-  try {
-    const updated = db.toggleProductAvailability(req.params.id);
-    if (!updated) return res.status(404).json({ success: false, error: 'Producto no encontrado' });
-    res.json({ success: true, message: 'Disponibilidad actualizada', data: updated });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
+  return res.status(405).json({
+    success: false,
+    error: 'La disponibilidad de productos está gobernada por iDempiere ERP (M_Product.IsActive). Operación no permitida.'
+  });
 });
 
 router.delete('/products/:id', (req, res) => {
-  try {
-    const deleted = db.deleteProduct(req.params.id);
-    if (!deleted) return res.status(404).json({ success: false, error: 'Producto no encontrado' });
-    res.json({ success: true, message: `Producto ${req.params.id} eliminado.` });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
+  return res.status(405).json({
+    success: false,
+    error: 'El catálogo de productos es de solo lectura y se administra exclusivamente desde iDempiere ERP (M_Product). Operación no permitida.'
+  });
 });
 
 router.post('/reset', (req, res) => {
-  try {
-    const products = db.resetProducts();
-    res.json({ success: true, message: 'Datos de catálogo restablecidos en SQLite.', count: products.length });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
+  return res.status(405).json({
+    success: false,
+    error: 'El catálogo de productos está vinculado a iDempiere ERP. Utilice la sincronización ERP para actualizar los registros.'
+  });
 });
 
 // ==========================================
-// 2. CATEGORÍAS DE PRODUCTOS (Mantenible)
+// 2. CATEGORÍAS DE PRODUCTOS (SOLO LECTURA - GOBERNADO POR IDEMPIERE ERP)
 // ==========================================
 router.get('/categories', (req, res) => {
   try {
@@ -123,34 +128,24 @@ router.get('/categories/:id', (req, res) => {
 });
 
 router.post('/categories', (req, res) => {
-  try {
-    const { name } = req.body;
-    if (!name) return res.status(400).json({ success: false, error: 'El nombre de categoría es obligatorio.' });
-    const category = db.addProductCategory(req.body);
-    res.status(201).json({ success: true, message: 'Categoría creada exitosamente', data: category });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
+  return res.status(405).json({
+    success: false,
+    error: 'El catálogo de categorías de productos es de solo lectura y se administra exclusivamente desde iDempiere ERP (M_Product_Category). Operación no permitida.'
+  });
 });
 
 router.put('/categories/:id', (req, res) => {
-  try {
-    const updated = db.updateProductCategory(req.params.id, req.body);
-    if (!updated) return res.status(404).json({ success: false, error: 'Categoría no encontrada' });
-    res.json({ success: true, message: 'Categoría actualizada exitosamente', data: updated });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
+  return res.status(405).json({
+    success: false,
+    error: 'El catálogo de categorías de productos es de solo lectura y se administra exclusivamente desde iDempiere ERP (M_Product_Category). Operación no permitida.'
+  });
 });
 
 router.delete('/categories/:id', (req, res) => {
-  try {
-    const deleted = db.deleteProductCategory(req.params.id);
-    if (!deleted) return res.status(404).json({ success: false, error: 'Categoría no encontrada' });
-    res.json({ success: true, message: 'Categoría eliminada' });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
+  return res.status(405).json({
+    success: false,
+    error: 'El catálogo de categorías de productos es de solo lectura y se administra exclusivamente desde iDempiere ERP (M_Product_Category). Operación no permitida.'
+  });
 });
 
 // ==========================================

@@ -59,7 +59,7 @@ export default function MasterCatalogsView({ activeSubTab: initialSubTab = 'cate
   const getEffectiveBaseUrl = () => {
     if (baseUrl) return baseUrl;
     const config = AuthService.getConnectionConfig();
-    return config?.baseUrl || 'https://test.idempiere.org:443';
+    return config?.baseUrl || 'https://lunaerp.egssmart.com';
   };
 
   const fetchAllCatalogs = async () => {
@@ -438,8 +438,8 @@ export default function MasterCatalogsView({ activeSubTab: initialSubTab = 'cate
         marginBottom: '20px'
       }}>
         {[
-          { id: 'categories', label: 'Categorías Productos', icon: '🏷️', count: categories.length, maintainable: true, erpTable: 'M_Product_Category' },
-          { id: 'products', label: 'Catálogo de Productos', icon: '🍔', count: products.length, maintainable: true, erpTable: 'M_Product' },
+          { id: 'categories', label: 'Categorías Productos', icon: '🏷️', count: categories.length, maintainable: false, erpTable: 'M_Product_Category' },
+          { id: 'products', label: 'Catálogo de Productos', icon: '🍔', count: products.length, maintainable: false, erpTable: 'M_Product' },
           { id: 'pricelists', label: 'Catálogo de Precios', icon: '💲', count: priceLists.length, maintainable: true, erpTable: 'M_PriceList' },
           { id: 'customer-categories', label: 'Categorías Clientes', icon: '👥', count: customerCategories.length, maintainable: true, erpTable: 'C_BP_Group' },
           { id: 'customers', label: 'Catálogo Clientes', icon: '👤', count: customers.length, maintainable: true, erpTable: 'C_BPartner' },
@@ -525,7 +525,7 @@ export default function MasterCatalogsView({ activeSubTab: initialSubTab = 'cate
 
           {/* Right Actions: Maintainable vs Read-only */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            {activeCatalog === 'taxes' ? (
+            {activeCatalog === 'taxes' || activeCatalog === 'categories' || activeCatalog === 'products' ? (
               <span style={{
                 background: '#f1f5f9',
                 color: '#475569',
@@ -535,7 +535,7 @@ export default function MasterCatalogsView({ activeSubTab: initialSubTab = 'cate
                 fontSize: '0.78rem',
                 fontWeight: '800'
               }}>
-                🔒 Catálogo de Solo Lectura (ERP Oficial)
+                🔒 Catálogo de Solo Lectura (iDempiere ERP)
               </span>
             ) : (
               <button
@@ -583,10 +583,28 @@ export default function MasterCatalogsView({ activeSubTab: initialSubTab = 'cate
         </div>
 
         {/* ======================================================== */}
-        {/* 1. TABLA: CATEGORÍAS DE PRODUCTOS (Mantenible) */}
+        {/* 1. TABLA: CATEGORÍAS DE PRODUCTOS (Solo Lectura - ERP) */}
         {/* ======================================================== */}
         {activeCatalog === 'categories' && (
-          <div style={{ overflowX: 'auto' }}>
+          <div>
+            {/* Banner Informativo de Solo Lectura ERP */}
+            <div style={{
+              background: '#f8fafc',
+              border: '1px solid #cbd5e1',
+              borderRadius: '12px',
+              padding: '14px 18px',
+              marginBottom: '16px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px'
+            }}>
+              <span style={{ fontSize: '1.5rem' }}>🔒</span>
+              <div style={{ fontSize: '0.84rem', color: '#334155', lineHeight: 1.45 }}>
+                <strong>Catálogo Oficial de Solo Lectura (iDempiere ERP):</strong> Las categorías de productos se administran exclusivamente desde la tabla maestra <code>M_Product_Category</code> en iDempiere ERP. La creación, edición y eliminación manual están deshabilitadas en la aplicación comercial para garantizar que iDempiere sea la única fuente de la verdad.
+              </div>
+            </div>
+
+            <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.86rem' }}>
               <thead>
                 <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0', color: '#475569' }}>
@@ -595,7 +613,7 @@ export default function MasterCatalogsView({ activeSubTab: initialSubTab = 'cate
                   <th style={{ padding: '12px 16px' }}>Descripción</th>
                   <th style={{ padding: '12px 16px' }}>Productos Asociados</th>
                   <th style={{ padding: '12px 16px' }}>Estado</th>
-                  <th style={{ padding: '12px 16px', textAlign: 'right' }}>Acciones</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'right' }}>Gestión ERP</th>
                 </tr>
               </thead>
               <tbody>
@@ -628,50 +646,49 @@ export default function MasterCatalogsView({ activeSubTab: initialSubTab = 'cate
                       </span>
                     </td>
                     <td style={{ padding: '14px 16px', textAlign: 'right' }}>
-                      <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
-                        <button
-                          onClick={() => openEditModal(c)}
-                          style={{
-                            background: '#f1f5f9',
-                            border: '1px solid #cbd5e1',
-                            borderRadius: '6px',
-                            padding: '4px 8px',
-                            cursor: 'pointer',
-                            fontSize: '0.75rem',
-                            fontWeight: '700'
-                          }}
-                        >
-                          ✏️ Editar
-                        </button>
-                        <button
-                          onClick={() => handleDeleteItem(c.id, c.name)}
-                          style={{
-                            background: '#fee2e2',
-                            border: '1px solid #fecaca',
-                            color: '#ef4444',
-                            borderRadius: '6px',
-                            padding: '4px 8px',
-                            cursor: 'pointer',
-                            fontSize: '0.75rem',
-                            fontWeight: '700'
-                          }}
-                        >
-                          🗑️
-                        </button>
-                      </div>
+                      <span style={{
+                        background: '#f8fafc',
+                        border: '1px solid #e2e8f0',
+                        color: '#64748b',
+                        padding: '4px 10px',
+                        borderRadius: '6px',
+                        fontSize: '0.74rem',
+                        fontWeight: '700'
+                      }}>
+                        Solo Lectura (ERP)
+                      </span>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+          </div>
         )}
 
         {/* ======================================================== */}
-        {/* 2. TABLA: PRODUCTOS (Mantenible) */}
+        {/* 2. TABLA: PRODUCTOS (Solo Lectura - ERP) */}
         {/* ======================================================== */}
         {activeCatalog === 'products' && (
-          <div style={{ overflowX: 'auto' }}>
+          <div>
+            {/* Banner Informativo de Solo Lectura ERP */}
+            <div style={{
+              background: '#f8fafc',
+              border: '1px solid #cbd5e1',
+              borderRadius: '12px',
+              padding: '14px 18px',
+              marginBottom: '16px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px'
+            }}>
+              <span style={{ fontSize: '1.5rem' }}>🔒</span>
+              <div style={{ fontSize: '0.84rem', color: '#334155', lineHeight: 1.45 }}>
+                <strong>Catálogo Maestro de Productos de Solo Lectura (iDempiere ERP):</strong> La única fuente de la verdad para el catálogo de productos es iDempiere ERP (<code>M_Product</code>). La creación, edición y eliminación directa están deshabilitadas y las sincronizaciones fluyen unidireccionalmente desde el ERP central hacia SQLite.
+              </div>
+            </div>
+
+            <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.86rem' }}>
               <thead>
                 <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0', color: '#475569' }}>
@@ -682,7 +699,7 @@ export default function MasterCatalogsView({ activeSubTab: initialSubTab = 'cate
                   <th style={{ padding: '12px 16px' }}>Stock</th>
                   <th style={{ padding: '12px 16px' }}>Especialidad</th>
                   <th style={{ padding: '12px 16px' }}>Estado</th>
-                  <th style={{ padding: '12px 16px', textAlign: 'right' }}>Acciones</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'right' }}>Gestión ERP</th>
                 </tr>
               </thead>
               <tbody>
@@ -743,42 +760,23 @@ export default function MasterCatalogsView({ activeSubTab: initialSubTab = 'cate
                       </span>
                     </td>
                     <td style={{ padding: '14px 16px', textAlign: 'right' }}>
-                      <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
-                        <button
-                          onClick={() => openEditModal(p)}
-                          style={{
-                            background: '#f1f5f9',
-                            border: '1px solid #cbd5e1',
-                            borderRadius: '6px',
-                            padding: '4px 8px',
-                            cursor: 'pointer',
-                            fontSize: '0.75rem',
-                            fontWeight: '700'
-                          }}
-                        >
-                          ✏️ Editar
-                        </button>
-                        <button
-                          onClick={() => handleDeleteItem(p.id, p.name)}
-                          style={{
-                            background: '#fee2e2',
-                            border: '1px solid #fecaca',
-                            color: '#ef4444',
-                            borderRadius: '6px',
-                            padding: '4px 8px',
-                            cursor: 'pointer',
-                            fontSize: '0.75rem',
-                            fontWeight: '700'
-                          }}
-                        >
-                          🗑️
-                        </button>
-                      </div>
+                      <span style={{
+                        background: '#f8fafc',
+                        border: '1px solid #e2e8f0',
+                        color: '#64748b',
+                        padding: '4px 10px',
+                        borderRadius: '6px',
+                        fontSize: '0.74rem',
+                        fontWeight: '700'
+                      }}>
+                        Solo Lectura (ERP)
+                      </span>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+          </div>
           </div>
         )}
 

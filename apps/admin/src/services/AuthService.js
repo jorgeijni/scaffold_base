@@ -28,8 +28,8 @@ export const DEFAULT_LANGUAGES = [
 ];
 
 export const GARDENWORLD_DEMO_PRESET = {
-  baseUrl: 'https://test.idempiere.org:443',
-  userName: 'admin @ gardenworld.com',
+  baseUrl: 'https://lunaerp.egssmart.com',
+  userName: 'GardenAdmin',
   password: 'GardenAdmin',
   parameters: {
     clientId: 11,
@@ -40,7 +40,7 @@ export const GARDENWORLD_DEMO_PRESET = {
   },
   labels: {
     clientName: 'GardenWorld',
-    roleName: 'Admin',
+    roleName: 'GardenWorld Admin',
     orgName: 'HQ',
     warehouseName: 'HQ Warehouse'
   }
@@ -466,8 +466,11 @@ export class AuthService {
       organizations = await this.fetchOrganizations(tempToken, defaultClientId, defaultRoleId, connectionOverride);
     }
 
-    const defaultOrgId = organizations[0]?.id ?? null;
-    if (warehouses.length === 0 && defaultClientId !== null && defaultRoleId !== null && defaultOrgId !== null) {
+    // Seleccionar una organización inicial operativa válida (distinta de asterisco / 0 si hay sedes reales)
+    const nonStarOrg = organizations.find((o) => Number(o.id) !== 0) || organizations[0];
+    const defaultOrgId = nonStarOrg?.id ?? null;
+
+    if (defaultClientId !== null && defaultRoleId !== null && defaultOrgId !== null) {
       warehouses = await this.fetchWarehouses(tempToken, defaultClientId, defaultRoleId, defaultOrgId, connectionOverride);
     }
 
@@ -519,7 +522,19 @@ export class AuthService {
   }
 
   async fetchWarehouses(tempToken, clientId, roleId, organizationId, connectionOverride = null) {
-    if (clientId === null || roleId === null || organizationId === null) return [];
+    if (
+      clientId === null ||
+      clientId === undefined ||
+      clientId === '' ||
+      roleId === null ||
+      roleId === undefined ||
+      roleId === '' ||
+      organizationId === null ||
+      organizationId === undefined ||
+      organizationId === ''
+    ) {
+      return [];
+    }
     const query = `client=${encodeURIComponent(clientId)}&role=${encodeURIComponent(roleId)}&organization=${encodeURIComponent(organizationId)}`;
     try {
       const { data } = await this.requestJson(`/api/v1/auth/warehouses?${query}`, {
@@ -528,7 +543,8 @@ export class AuthService {
         connectionConfig: connectionOverride
       });
       return this.normalizeNamedList(this.extractArray(data, ['warehouses', 'records', 'data']));
-    } catch {
+    } catch (err) {
+      console.warn(`[AuthService] No se pudieron cargar almacenes para org ${organizationId}:`, err?.message || err);
       return [];
     }
   }
