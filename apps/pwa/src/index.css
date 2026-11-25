@@ -1,31 +1,4 @@
-/* apps/pwa/src/index.css */
-/* Premium Crispy & Gourmet Palette inspired by modern food ordering mobile apps */
-:root {
-  --primary: #e03e1a;
-  --primary-hover: #c43212;
-  --primary-light: #fff1ed;
-  --primary-border: #fed7cc;
-  --accent: #f59e0b;
-  --bg: #fbf7f2;
-  --surface: #ffffff;
-  --surface-border: #f0ebe4;
-  --surface-subtle: #f5efe8;
-  --text: #1a1614;
-  --text-muted: #78716c;
-  --text-light: #a8a29e;
-  --badge-red: #d32f2f;
-  --badge-orange: #f57c00;
-  --badge-amber: #e65100;
-  --success: #16a34a;
-  --danger: #dc2626;
-  --radius-sm: 8px;
-  --radius-md: 14px;
-  --radius-lg: 20px;
-  --radius-full: 9999px;
-  --shadow-sm: 0 2px 8px rgba(30, 20, 10, 0.04);
-  --shadow-md: 0 6px 18px rgba(30, 20, 10, 0.06);
-  --shadow-lg: 0 12px 30px rgba(30, 20, 10, 0.1);
-}
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Oswald:wght@600;700&display=swap');
 
 * {
   box-sizing: border-box;
@@ -35,71 +8,18 @@
 }
 
 body {
-  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  background-color: #f0ece6;
-  color: var(--text);
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  line-height: 1.5;
+  user-select: none;
   min-height: 100vh;
-  display: flex;
-  justify-content: center;
-  align-items: stretch;
-  letter-spacing: -0.01em;
 }
 
-#root {
-  width: 100%;
-  max-width: 480px;
-  min-height: 100vh;
-  background-color: var(--bg);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.09);
-  display: flex;
-  flex-direction: column;
-  position: relative;
-  overflow: hidden;
-}
-
-/* Animations */
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes slideUp {
-  from { transform: translateY(100%); }
-  to { transform: translateY(0); }
-}
-
-@keyframes pulseGlow {
-  0% { transform: scale(1); }
-  50% { transform: scale(1.04); }
-  100% { transform: scale(1); }
-}
-
-.fade-in {
-  animation: fadeIn 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-
-.slide-up {
-  animation: slideUp 0.32s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-
-/* Hide scrollbars for a clean mobile app look while keeping scrollability */
-.no-scrollbar::-webkit-scrollbar {
-  display: none;
-}
-.no-scrollbar {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
-
-/* Scrollbar for drawers */
+/* Custom Scrollbar */
 ::-webkit-scrollbar {
-  width: 4px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
+  width: 5px;
+  height: 5px;
 }
 ::-webkit-scrollbar-thumb {
-  background: #e2d9cf;
-  border-radius: 4px;
+  background: rgba(148, 163, 184, 0.3);
+  border-radius: 9999px;
 }
-

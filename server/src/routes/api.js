@@ -1,38 +1,35 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
-const os = require('os');
 
-// Health Check Endpoint (For Dokploy Health Checks)
+// ==========================================
+// 1. HEALTH CHECK (Dokploy & Container Monitoring)
+// ==========================================
 router.get('/health', (req, res) => {
   const dbStatus = db.getDbStatus();
   res.json({
     status: 'healthy',
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
-    version: '1.0.0',
-    platform: 'Dokploy CI/CD Live Demo',
+    version: '2.0.0',
+    platform: 'RapidFood ERP • Production SQLite',
     database: dbStatus
   });
 });
 
-// Ping DB Latency
-router.get('/db/ping', (req, res) => {
-  try {
-    const ping = db.pingDb();
-    res.json({ success: true, data: ping });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
 // ==========================================
-// 1. PRODUCTOS (Mantenible)
+// 2. PRODUCTOS (M_Product) - ESTRICTAMENTE SOLO LECTURA (Fuente: iDempiere ERP)
 // ==========================================
 router.get('/products', (req, res) => {
   try {
     const products = db.getProducts();
-    res.json({ success: true, count: products.length, data: products });
+    res.json({
+      success: true,
+      readOnly: true,
+      count: products.length,
+      message: 'Catálogo de productos (M_Product) en modo solo lectura. Única fuente de verdad: iDempiere ERP.',
+      data: products
+    });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -42,116 +39,85 @@ router.get('/products/:id', (req, res) => {
   try {
     const product = db.getProductById(req.params.id);
     if (!product) return res.status(404).json({ success: false, error: 'Producto no encontrado' });
-    res.json({ success: true, data: product });
+    res.json({ success: true, readOnly: true, data: product });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// ==========================================
-// 1. PRODUCTOS (SOLO LECTURA - GOBERNADO POR IDEMPIERE ERP)
-// ==========================================
-router.get('/products', (req, res) => {
-  try {
-    const products = db.getProducts();
-    res.json({ success: true, count: products.length, data: products });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-router.get('/products/:id', (req, res) => {
-  try {
-    const product = db.getProductById(req.params.id);
-    if (!product) return res.status(404).json({ success: false, error: 'Producto no encontrado' });
-    res.json({ success: true, data: product });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
+// Bloqueo estricto de mutaciones locales en Productos (Fuente de la verdad: iDempiere ERP)
 router.post('/products', (req, res) => {
   return res.status(405).json({
     success: false,
-    error: 'El catálogo de productos es de solo lectura y se administra exclusivamente desde iDempiere ERP (M_Product). Operación no permitida.'
+    error: 'Operación no permitida: El catálogo de productos (M_Product) es de solo lectura. Única fuente de verdad: iDempiere ERP.'
   });
 });
 
 router.put('/products/:id', (req, res) => {
   return res.status(405).json({
     success: false,
-    error: 'El catálogo de productos es de solo lectura y se administra exclusivamente desde iDempiere ERP (M_Product). Operación no permitida.'
-  });
-});
-
-router.patch('/products/:id/toggle', (req, res) => {
-  return res.status(405).json({
-    success: false,
-    error: 'La disponibilidad de productos está gobernada por iDempiere ERP (M_Product.IsActive). Operación no permitida.'
+    error: 'Operación no permitida: El catálogo de productos (M_Product) es de solo lectura. Única fuente de verdad: iDempiere ERP.'
   });
 });
 
 router.delete('/products/:id', (req, res) => {
   return res.status(405).json({
     success: false,
-    error: 'El catálogo de productos es de solo lectura y se administra exclusivamente desde iDempiere ERP (M_Product). Operación no permitida.'
+    error: 'Operación no permitida: El catálogo de productos (M_Product) es de solo lectura. Única fuente de verdad: iDempiere ERP.'
   });
 });
 
 router.post('/reset', (req, res) => {
   return res.status(405).json({
     success: false,
-    error: 'El catálogo de productos está vinculado a iDempiere ERP. Utilice la sincronización ERP para actualizar los registros.'
+    error: 'Operación no permitida: Restablecimiento deshabilitado. Sincronice directamente desde iDempiere ERP.'
   });
 });
 
 // ==========================================
-// 2. CATEGORÍAS DE PRODUCTOS (SOLO LECTURA - GOBERNADO POR IDEMPIERE ERP)
+// 3. CATEGORÍAS DE PRODUCTOS (M_Product_Category) - ESTRICTAMENTE SOLO LECTURA
 // ==========================================
-router.get('/categories', (req, res) => {
+router.get('/product-categories', (req, res) => {
   try {
     const categories = db.getProductCategories();
-    res.json({ success: true, count: categories.length, data: categories });
+    res.json({
+      success: true,
+      readOnly: true,
+      count: categories.length,
+      message: 'Catálogo de categorías de productos (M_Product_Category) en modo solo lectura. Única fuente de verdad: iDempiere ERP.',
+      data: categories
+    });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-router.get('/categories/:id', (req, res) => {
-  try {
-    const category = db.getProductCategoryById(req.params.id);
-    if (!category) return res.status(404).json({ success: false, error: 'Categoría no encontrada' });
-    res.json({ success: true, data: category });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-router.post('/categories', (req, res) => {
+// Bloqueo estricto de mutaciones locales en Categorías de Productos
+router.post('/product-categories', (req, res) => {
   return res.status(405).json({
     success: false,
-    error: 'El catálogo de categorías de productos es de solo lectura y se administra exclusivamente desde iDempiere ERP (M_Product_Category). Operación no permitida.'
+    error: 'Operación no permitida: El catálogo de categorías de productos (M_Product_Category) es de solo lectura. Única fuente de verdad: iDempiere ERP.'
   });
 });
 
-router.put('/categories/:id', (req, res) => {
+router.put('/product-categories/:id', (req, res) => {
   return res.status(405).json({
     success: false,
-    error: 'El catálogo de categorías de productos es de solo lectura y se administra exclusivamente desde iDempiere ERP (M_Product_Category). Operación no permitida.'
+    error: 'Operación no permitida: El catálogo de categorías de productos (M_Product_Category) es de solo lectura. Única fuente de verdad: iDempiere ERP.'
   });
 });
 
-router.delete('/categories/:id', (req, res) => {
+router.delete('/product-categories/:id', (req, res) => {
   return res.status(405).json({
     success: false,
-    error: 'El catálogo de categorías de productos es de solo lectura y se administra exclusivamente desde iDempiere ERP (M_Product_Category). Operación no permitida.'
+    error: 'Operación no permitida: El catálogo de categorías de productos (M_Product_Category) es de solo lectura. Única fuente de verdad: iDempiere ERP.'
   });
 });
 
 // ==========================================
-// 3. LISTAS DE PRECIOS & VERSIONES (Mantenible)
+// 4. LISTAS DE PRECIOS & VERSIONES (M_PriceList, M_PriceList_Version, M_ProductPrice)
 // ==========================================
-router.get('/pricelists', (req, res) => {
+router.get('/price-lists', (req, res) => {
   try {
     const lists = db.getPriceLists();
     res.json({ success: true, count: lists.length, data: lists });
@@ -160,99 +126,82 @@ router.get('/pricelists', (req, res) => {
   }
 });
 
-router.get('/pricelists/:id', (req, res) => {
-  try {
-    const list = db.getPriceListById(req.params.id);
-    if (!list) return res.status(404).json({ success: false, error: 'Lista de precios no encontrada' });
-    res.json({ success: true, data: list });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-router.post('/pricelists', (req, res) => {
+router.post('/price-lists', (req, res) => {
   try {
     const { name } = req.body;
-    if (!name) return res.status(400).json({ success: false, error: 'El nombre de lista es obligatorio.' });
-    const list = db.addPriceList(req.body);
-    res.status(201).json({ success: true, message: 'Lista de precios creada', data: list });
+    if (!name) return res.status(400).json({ success: false, error: 'Nombre de lista es obligatorio.' });
+    const created = db.addPriceList(req.body);
+    res.status(201).json({ success: true, message: 'Lista de precios creada', data: created });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-router.put('/pricelists/:id', (req, res) => {
+router.put('/price-lists/:id', (req, res) => {
   try {
     const updated = db.updatePriceList(req.params.id, req.body);
-    if (!updated) return res.status(404).json({ success: false, error: 'Lista de precios no encontrada' });
     res.json({ success: true, message: 'Lista de precios actualizada', data: updated });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-router.delete('/pricelists/:id', (req, res) => {
+router.delete('/price-lists/:id', (req, res) => {
   try {
-    const deleted = db.deletePriceList(req.params.id);
-    if (!deleted) return res.status(404).json({ success: false, error: 'Lista de precios no encontrada' });
-    res.json({ success: true, message: 'Lista de precios eliminada' });
+    const ok = db.deletePriceList(req.params.id);
+    res.json({ success: ok, message: `Lista de precios ${req.params.id} eliminada.` });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-router.get('/pricelists/:id/versions', (req, res) => {
+router.get('/price-list-versions', (req, res) => {
   try {
-    const versions = db.getPriceListVersions(req.params.id);
+    const versions = db.getPriceListVersions(req.query.priceListId ? Number(req.query.priceListId) : null);
     res.json({ success: true, count: versions.length, data: versions });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-router.post('/pricelists/:id/versions', (req, res) => {
+router.get('/product-prices', (req, res) => {
   try {
-    const { name, valid_from } = req.body;
-    if (!name) return res.status(400).json({ success: false, error: 'El nombre de versión es obligatorio.' });
-    const version = db.addPriceListVersion({
-      price_list_id: req.params.id,
-      name,
-      valid_from
-    });
-    res.status(201).json({ success: true, message: 'Versión de lista creada', data: version });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-router.get('/pricelists/versions/:versionId/prices', (req, res) => {
-  try {
-    const prices = db.getVersionPrices(req.params.versionId);
+    const prices = db.getProductPrices(req.query.versionId ? Number(req.query.versionId) : null);
     res.json({ success: true, count: prices.length, data: prices });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-router.post('/pricelists/versions/:versionId/prices', (req, res) => {
+router.post('/product-prices', (req, res) => {
   try {
-    const { product_id, price_std, price_list, price_limit } = req.body;
-    if (!product_id || price_std === undefined) {
-      return res.status(400).json({ success: false, error: 'product_id y price_std son requeridos.' });
-    }
-    const price = db.setProductPrice(req.params.versionId, product_id, {
-      price_std,
-      price_list: price_list ?? price_std,
-      price_limit: price_limit ?? price_std * 0.9
-    });
-    res.json({ success: true, message: 'Precio de producto actualizado en la versión', data: price });
+    const created = db.addProductPrice(req.body);
+    res.status(201).json({ success: true, message: 'Precio de producto asignado', data: created });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.put('/product-prices/:id', (req, res) => {
+  try {
+    const updated = db.updateProductPrice(req.params.id, req.body);
+    res.json({ success: true, message: 'Precio actualizado', data: updated });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.delete('/product-prices/:id', (req, res) => {
+  try {
+    const ok = db.deleteProductPrice(req.params.id);
+    res.json({ success: ok, message: `Precio ${req.params.id} eliminado.` });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
 // ==========================================
-// 4. CATEGORÍAS DE CLIENTES / BP_GROUPS (Mantenible)
+// 5. CATEGORÍAS DE CLIENTES (C_BP_Group)
 // ==========================================
 router.get('/customer-categories', (req, res) => {
   try {
@@ -263,22 +212,12 @@ router.get('/customer-categories', (req, res) => {
   }
 });
 
-router.get('/customer-categories/:id', (req, res) => {
-  try {
-    const cat = db.getCustomerCategoryById(req.params.id);
-    if (!cat) return res.status(404).json({ success: false, error: 'Categoría de cliente no encontrada' });
-    res.json({ success: true, data: cat });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
 router.post('/customer-categories', (req, res) => {
   try {
     const { name } = req.body;
-    if (!name) return res.status(400).json({ success: false, error: 'El nombre de grupo de cliente es obligatorio.' });
-    const cat = db.addCustomerCategory(req.body);
-    res.status(201).json({ success: true, message: 'Grupo de clientes creado', data: cat });
+    if (!name) return res.status(400).json({ success: false, error: 'El nombre del grupo es obligatorio.' });
+    const created = db.addCustomerCategory(req.body);
+    res.status(201).json({ success: true, message: 'Grupo de clientes creado', data: created });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -287,8 +226,7 @@ router.post('/customer-categories', (req, res) => {
 router.put('/customer-categories/:id', (req, res) => {
   try {
     const updated = db.updateCustomerCategory(req.params.id, req.body);
-    if (!updated) return res.status(404).json({ success: false, error: 'Categoría de cliente no encontrada' });
-    res.json({ success: true, message: 'Grupo de clientes actualizado', data: updated });
+    res.json({ success: true, message: 'Grupo actualizado', data: updated });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -296,16 +234,15 @@ router.put('/customer-categories/:id', (req, res) => {
 
 router.delete('/customer-categories/:id', (req, res) => {
   try {
-    const deleted = db.deleteCustomerCategory(req.params.id);
-    if (!deleted) return res.status(404).json({ success: false, error: 'Categoría de cliente no encontrada' });
-    res.json({ success: true, message: 'Grupo de clientes eliminado' });
+    const ok = db.deleteCustomerCategory(req.params.id);
+    res.json({ success: ok, message: `Grupo ${req.params.id} eliminado.` });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
 // ==========================================
-// 5. CLIENTES / SOCIOS DE NEGOCIO (Mantenible)
+// 6. CLIENTES (C_BPartner)
 // ==========================================
 router.get('/customers', (req, res) => {
   try {
@@ -329,9 +266,9 @@ router.get('/customers/:id', (req, res) => {
 router.post('/customers', (req, res) => {
   try {
     const { name } = req.body;
-    if (!name) return res.status(400).json({ success: false, error: 'El nombre del cliente es obligatorio.' });
-    const customer = db.addCustomer(req.body);
-    res.status(201).json({ success: true, message: 'Cliente registrado exitosamente', data: customer });
+    if (!name) return res.status(400).json({ success: false, error: 'Nombre de cliente es obligatorio.' });
+    const created = db.addCustomer(req.body);
+    res.status(201).json({ success: true, message: 'Cliente registrado exitosamente', data: created });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -341,7 +278,7 @@ router.put('/customers/:id', (req, res) => {
   try {
     const updated = db.updateCustomer(req.params.id, req.body);
     if (!updated) return res.status(404).json({ success: false, error: 'Cliente no encontrado' });
-    res.json({ success: true, message: 'Cliente actualizado exitosamente', data: updated });
+    res.json({ success: true, message: 'Cliente actualizado', data: updated });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -349,25 +286,24 @@ router.put('/customers/:id', (req, res) => {
 
 router.delete('/customers/:id', (req, res) => {
   try {
-    const deleted = db.deleteCustomer(req.params.id);
-    if (!deleted) return res.status(404).json({ success: false, error: 'Cliente no encontrado' });
-    res.json({ success: true, message: 'Cliente eliminado' });
+    const ok = db.deleteCustomer(req.params.id);
+    res.json({ success: ok, message: `Cliente ${req.params.id} eliminado.` });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
 // ==========================================
-// 6. IMPUESTOS (SOLO LECTURA EN APLICACIÓN)
+// 7. IMPUESTOS (C_Tax) - ESTRICTAMENTE SOLO LECTURA
 // ==========================================
 router.get('/taxes', (req, res) => {
   try {
     const taxes = db.getTaxes();
     res.json({
       success: true,
-      readonly: true,
-      message: 'Catálogo oficial de impuestos de solo lectura (mantenido exclusivamente desde ERP)',
+      readOnly: true,
       count: taxes.length,
+      message: 'Catálogo de impuestos (C_Tax) en modo de solo lectura.',
       data: taxes
     });
   } catch (error) {
@@ -375,231 +311,88 @@ router.get('/taxes', (req, res) => {
   }
 });
 
-router.get('/taxes/:id', (req, res) => {
-  try {
-    const tax = db.getTaxById(req.params.id);
-    if (!tax) return res.status(404).json({ success: false, error: 'Impuesto no encontrado' });
-    res.json({ success: true, readonly: true, data: tax });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// Rechazo explícito a mutaciones manuales de impuestos
-router.all(['/taxes', '/taxes/:id'], (req, res, next) => {
-  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method.toUpperCase())) {
+// Bloqueo explícito de cualquier intento de mutación en impuestos
+router.all('/taxes/*', (req, res) => {
+  if (req.method !== 'GET') {
     return res.status(405).json({
       success: false,
-      error: 'Operación no permitida: El catálogo de impuestos es de SOLO LECTURA en esta aplicación y se sincroniza exclusivamente desde iDempiere ERP.'
+      error: 'Operación no permitida: El catálogo de impuestos (C_Tax) es de solo lectura.'
     });
   }
-  next();
 });
 
 // ==========================================
-// 6.b. TIPOS DE INTERVENCIÓN WASH (Mantenible)
+// 8. SINCRONIZACIÓN BULK DESDE IDEMPIERE ERP
 // ==========================================
-router.get('/tipo-intervencion-wash', (req, res) => {
+router.post('/sync/:catalog', (req, res) => {
+  const catalog = req.params.catalog.replace(/-/g, '_');
+  const { records } = req.body;
+
+  if (!Array.isArray(records)) {
+    return res.status(400).json({ success: false, error: 'Se requiere un array en "records".' });
+  }
+
   try {
-    const tipos = db.getTiposIntervencionWash();
-    res.json({ success: true, count: tipos.length, data: tipos });
+    const result = db.syncCatalogFromERP(catalog, records);
+    res.json({ success: true, message: `Catálogo ${catalog} sincronizado exitosamente.`, data: result });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-router.get('/tipo-intervencion-wash/:id', (req, res) => {
+router.get('/sync/logs', (req, res) => {
   try {
-    const tipo = db.getTipoIntervencionWashById(req.params.id);
-    if (!tipo) return res.status(404).json({ success: false, error: 'Tipo de intervención no encontrado' });
-    res.json({ success: true, data: tipo });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-router.post('/tipo-intervencion-wash', (req, res) => {
-  try {
-    const { name } = req.body;
-    if (!name) {
-      return res.status(400).json({ success: false, error: 'El nombre de la intervención es obligatorio.' });
-    }
-    const created = db.addTipoIntervencionWash(req.body);
-    res.status(201).json({ success: true, message: 'Tipo de intervención wash creado', data: created });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-router.put('/tipo-intervencion-wash/:id', (req, res) => {
-  try {
-    const updated = db.updateTipoIntervencionWash(req.params.id, req.body);
-    if (!updated) return res.status(404).json({ success: false, error: 'Tipo de intervención no encontrado' });
-    res.json({ success: true, message: 'Tipo de intervención wash actualizado', data: updated });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-router.delete('/tipo-intervencion-wash/:id', (req, res) => {
-  try {
-    const deleted = db.deleteTipoIntervencionWash(req.params.id);
-    if (!deleted) return res.status(404).json({ success: false, error: 'Tipo de intervención no encontrado' });
-    res.json({ success: true, message: 'Tipo de intervención wash eliminado' });
+    const limit = req.query.limit ? Number(req.query.limit) : 20;
+    const logs = db.getSyncLogs(limit);
+    res.json({ success: true, count: logs.length, data: logs });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
 // ==========================================
-// 7. CONSUMER METRICS & ORDERS
+// 9. PROXY LOCAL SERVER-TO-SERVER (IDEMPIERE REST)
 // ==========================================
-router.get('/metrics/customers', (req, res) => {
-  try {
-    const metrics = db.getConsumerMetrics();
-    res.json({ success: true, data: metrics });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+router.all('/idempiere-proxy', async (req, res) => {
+  const target = req.query.target;
+  if (!target) {
+    return res.status(400).json({ error: 'Falta parámetro ?target=' });
   }
-});
 
-router.get('/orders', (req, res) => {
   try {
-    const origin = req.query.origin || 'all';
-    const orders = db.getOrders(origin);
-    res.json({ success: true, count: orders.length, data: orders });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-router.post('/orders', (req, res) => {
-  try {
-    const newOrder = db.createOrder(req.body);
-    res.status(201).json({ success: true, message: 'Orden creada con éxito en SQLite', data: newOrder });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-router.patch('/orders/:id/status', (req, res) => {
-  try {
-    const { id } = req.params;
-    const { status } = req.body;
-    if (!status) return res.status(400).json({ success: false, error: 'El campo "status" es obligatorio.' });
-    const updated = db.updateOrder(id, { status });
-    if (!updated) return res.status(404).json({ success: false, error: `Orden ${id} no encontrada.` });
-    res.json({ success: true, message: 'Estado de orden actualizado', data: updated });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-router.post('/orders/:id/sync-erp', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const authHeader = req.headers.authorization || '';
-    const token = req.body.token || (authHeader.startsWith('Bearer ') ? authHeader.substring(7) : null);
-
-    if (!token) {
-      return res.status(401).json({
-        success: false,
-        error: 'Se requiere un token Bearer activo de iDempiere para coordinar la sincronización.'
-      });
+    const forwardHeaders = {
+      'Content-Type': req.headers['content-type'] || 'application/json',
+      'Accept': req.headers['accept'] || 'application/json'
+    };
+    if (req.headers['authorization']) {
+      forwardHeaders['Authorization'] = req.headers['authorization'];
     }
 
-    const order = db.getOrderById(id);
-    if (!order) {
-      return res.status(404).json({ success: false, error: `Orden ${id} no encontrada.` });
-    }
-
-    const ctx = req.body.context || {};
-    const baseUrl = (req.body.baseUrl || '').trim().replace(/\/+$/, '');
-    const orgId = ctx.organizationId ?? ctx.orgId ?? 11;
-
-    const erpPayload = {
-      AD_Client_ID: ctx.clientId ?? 11,
-      AD_Org_ID: orgId,
-      M_Warehouse_ID: ctx.warehouseId ?? 103,
-      DocumentNo: order.id,
-      Description: `[${order.channel}] Cliente: ${order.customerName} | Items: ${(order.items || []).map(i => `${i.quantity}x ${i.name}`).join(', ')}`,
-      GrandTotal: order.total,
-      IsSOTrx: true,
-      ...(ctx.userId ? { SalesRep_ID: ctx.userId } : {})
+    const fetchOptions = {
+      method: req.method,
+      headers: forwardHeaders
     };
 
-    let syncedLive = false;
-    let erpDocumentNo = `SO-${order.id}`;
-    let remoteStatus = null;
-    let remoteDetail = null;
-
-    if (baseUrl) {
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 8000);
-        const erpRes = await fetch(`${baseUrl}/api/v1/models/C_Order`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify(erpPayload),
-          signal: controller.signal
-        });
-        clearTimeout(timeoutId);
-        remoteStatus = erpRes.status;
-        const text = await erpRes.text();
-        let parsed = {};
-        try { parsed = text ? JSON.parse(text) : {}; } catch { parsed = { message: text }; }
-
-        if (erpRes.ok) {
-          syncedLive = true;
-          erpDocumentNo = parsed.DocumentNo || (parsed.id ? `SO-${parsed.id}` : erpDocumentNo);
-          remoteDetail = parsed;
-        } else {
-          remoteDetail = parsed.detail || parsed.message || parsed;
-        }
-      } catch (err) {
-        remoteDetail = err.message;
-      }
+    if (req.method !== 'GET' && req.method !== 'HEAD' && req.body && Object.keys(req.body).length > 0) {
+      fetchOptions.body = JSON.stringify(req.body);
     }
 
-    const updated = db.updateOrder(id, {
-      erpSyncStatus: syncedLive ? 'Sincronizado' : 'Coordinado (Cola ERP)',
-      erpDocumentNo: syncedLive ? erpDocumentNo : null,
-      erpContext: {
-        userId: ctx.userId ?? null,
-        clientId: ctx.clientId ?? null,
-        roleId: ctx.roleId ?? null,
-        orgId,
-        warehouseId: ctx.warehouseId ?? null
-      }
-    });
+    const idempiereRes = await fetch(target, fetchOptions);
+    const contentType = idempiereRes.headers.get('content-type') || '';
 
-    res.json({
-      success: true,
-      syncedLive,
-      remoteStatus,
-      message: syncedLive
-        ? `Sincronizado en vivo con iDempiere C_Order (${erpDocumentNo}).`
-        : `Sincronización coordinada con contexto ERP (Client #${erpPayload.AD_Client_ID}, Org #${erpPayload.AD_Org_ID}). Respuesta remota C_Order: HTTP ${remoteStatus || 'N/A'} (${typeof remoteDetail === 'string' ? remoteDetail : JSON.stringify(remoteDetail)}).`,
-      erpPayload,
-      data: updated
-    });
+    res.status(idempiereRes.status);
+    if (contentType.includes('application/json')) {
+      const data = await idempiereRes.json();
+      res.json(data);
+    } else {
+      const text = await idempiereRes.text();
+      res.send(text);
+    }
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    res.status(502).json({
+      error: `Error en Proxy Local hacia iDempiere (${target}): ${error.message}`
+    });
   }
-});
-
-// Diagnóstico de Infraestructura y Base de Datos
-router.get('/debug-network', (req, res) => {
-  res.json({
-    hostname: os.hostname(),
-    platform: os.platform(),
-    uptime: process.uptime(),
-    db_status: db.getDbStatus()
-  });
 });
 
 module.exports = router;

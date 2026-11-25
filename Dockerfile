@@ -35,14 +35,16 @@ COPY apps/admin/ ./
 RUN npm run build
 
 # ========================================================
-# ETAPA 4: Runtime Final (Node.js API + SQLite + Servidor Unificado)
+# ETAPA 4: Runtime Final (Node.js API + Servidor Unificado con SQLite)
 # ========================================================
 FROM node:22-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
 ENV PORT=3000
-ENV SQLITE_DB_PATH=/app/server/data/database.sqlite
+
+# Herramientas de compilación requeridas para módulos nativos C++ (better-sqlite3) en Alpine (x86_64 / ARM64)
+RUN apk add --no-cache python3 make g++
 
 # 1. Instalar dependencias del servidor backend
 COPY server/package*.json ./server/
@@ -51,17 +53,13 @@ RUN cd server && if [ -f package-lock.json ]; then npm ci --omit=dev; else npm i
 # 2. Copiar código fuente del backend
 COPY server/ ./server/
 
-# 3. Crear directorio persistente para SQLite y declarar volumen
-RUN mkdir -p /app/server/data
-VOLUME ["/app/server/data"]
-
-# 4. Copiar las 3 capas compiladas al directorio público del backend
+# 3. Copiar las 3 capas compiladas al directorio público del backend
 COPY --from=builder-ecommerce /app/ecommerce/dist ./server/public/ecommerce
 COPY --from=builder-pwa /app/pwa/dist ./server/public/pwa
 COPY --from=builder-admin /app/admin/dist ./server/public/admin
 
-# 5. Exponer puerto HTTP estándar
+# 4. Exponer puerto HTTP estándar
 EXPOSE 3000
 
-# 6. Iniciar la plataforma
+# 5. Iniciar la plataforma
 CMD ["node", "server/src/app.js"]

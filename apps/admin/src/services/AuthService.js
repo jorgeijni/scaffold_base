@@ -1,807 +1,409 @@
 /**
- * AuthService - Librería base reutilizable para autenticación contra iDempiere REST API v1.
- *
- * Diseñada sin dependencias de framework (compatible con React Admin Panel y futura PWA de Pedidos).
- * Implementa:
- *  - Autenticación Directa (1 Paso): POST /api/v1/auth/tokens con objeto anidado `parameters` y `organizationId`.
- *  - Autenticación Asistida (2 Pasos): POST /api/v1/auth/tokens -> GET /roles, /organizations, /warehouses -> PUT /api/v1/auth/tokens.
- *  - Persistencia de sesión contextualizada (token, userId, clientId, roleId, orgId, warehouseId, language).
- *  - Manejo configurable de Base URL y Proxy CORS (Directo, Proxy Local /api/idempiere/proxy, corsproxy.io o personalizado).
+ * iDempiere REST API v1 - AuthService
+ * 
+ * Modulo desacoplado y reutilizable para autenticacion y gestion de sesion
+ * contra iDempiere ERP. Disenado para el Panel de Administracion y reutilizable
+ * en la PWA de Pedidos / Preventa.
  */
 
-const DEFAULT_SESSION_STORAGE_KEY = 'idempiere_auth_session';
-const DEFAULT_CONFIG_STORAGE_KEY = 'idempiere_connection_config';
+const STORAGE_KEY = 'idempiere_auth_session';
+const CONFIG_KEY = 'idempiere_api_config';
+const PROFILE_CONFIG_KEY = 'idempiere_profile_config';
 
-export const CORS_PROXY_PRESETS = {
-  LOCAL: 'local',
-  CORSPROXY_IO: 'corsproxy.io',
-  CUSTOM: 'custom'
-};
-
-export const DEFAULT_LANGUAGES = [
-  { code: 'es_PE', name: 'Español Perú (es_PE)' },
-  { code: 'en_US', name: 'English (US)' },
-  { code: 'es_ES', name: 'Español (ES)' },
-  { code: 'es_MX', name: 'Español (MX)' },
-  { code: 'es_CO', name: 'Español (CO)' },
-  { code: 'pt_BR', name: 'Português (BR)' }
-];
-
-export const GARDENWORLD_DEMO_PRESET = {
-  baseUrl: 'https://lunaerp.egssmart.com',
-  userName: 'GardenAdmin',
+export const DEFAULT_DEMO_CONFIG = {
+  baseUrl: 'https://test.idempiere.org:443',
+  userName: 'admin @ gardenworld.com',
   password: 'GardenAdmin',
   parameters: {
     clientId: 11,
     roleId: 102,
     organizationId: 11,
     warehouseId: 103,
-    language: 'en_US'
-  },
-  labels: {
-    clientName: 'GardenWorld',
-    roleName: 'GardenWorld Admin',
-    orgName: 'HQ',
-    warehouseName: 'HQ Warehouse'
+    language: 'es_PE'
   }
 };
 
+export const DEFAULT_PROFILE_CONFIG = {
+  baseUrl: 'https://test.idempiere.org:443',
+  useCorsProxy: true,
+  proxyMode: 'local',
+  assistedMultiTenant: false, // false = 1 paso directo, true = 2 pasos asistido
+  defaultParameters: {
+    clientId: 11,
+    roleId: 102,
+    organizationId: 11,
+    warehouseId: 103,
+    language: 'es_PE'
+  }
+};
+
+export const PROXY_MODES = {
+  LOCAL: 'local',
+  NONE: 'none',
+  ALLORIGINS: 'allorigins',
+  CORSPROXY: 'corsproxy',
+  CUSTOM: 'custom'
+};
+
+/**
+ * Servicio Centralizado de Autenticacion con iDempiere REST API v1
+ */
 export class AuthService {
-  constructor(options = {}) {
-    this.sessionStorageKey = options.sessionStorageKey || DEFAULT_SESSION_STORAGE_KEY;
-    this.configStorageKey = options.configStorageKey || DEFAULT_CONFIG_STORAGE_KEY;
-    this.localProxyPath = options.localProxyPath || '/api/idempiere/proxy';
-    this.listeners = new Set();
+  /**
+   * Construye la URL final tomando en cuenta la modalidad de proxy CORS
+   * @param {string} baseUrl - URL base del servidor iDempiere
+   * @param {string} endpoint - Ruta relativa (/api/v1/auth/tokens)
+   * @param {Object} proxyConfig - Configuracion del proxy
+   * @returns {string} URL lista para fetch
+   */
+  static buildUrl(baseUrl, endpoint = '/api/v1/auth/tokens', proxyConfig = {}) {
+    const cleanBase = (baseUrl || DEFAULT_DEMO_CONFIG.baseUrl).replace(/\/+$/, '');
+    const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+    const targetUrl = `${cleanBase}${cleanEndpoint}`;
 
-    this.config = this.loadConnectionConfig({
-      baseUrl: options.baseUrl || GARDENWORLD_DEMO_PRESET.baseUrl,
-      corsProxyEnabled: options.corsProxyEnabled ?? true,
-      corsProxyMode: options.corsProxyMode || CORS_PROXY_PRESETS.LOCAL,
-      corsProxyCustomUrl: options.corsProxyCustomUrl || 'https://corsproxy.io/?',
-      enableMultiTenantLogin: options.enableMultiTenantLogin ?? false,
-      defaultParameters: {
-        ...GARDENWORLD_DEMO_PRESET.parameters,
-        ...(options.defaultParameters || {})
-      }
-    });
+    // Compatibilidad si proxyConfig es string u objeto
+    const mode = (typeof proxyConfig === 'string' ? proxyConfig : proxyConfig?.mode) || PROXY_MODES.LOCAL;
 
-    this.session = this.loadSession();
-  }
-
-  // =========================================================================
-  // Suscripción reactiva (para AuthContext o PWA)
-  // =========================================================================
-  subscribe(listener) {
-    this.listeners.add(listener);
-    return () => this.listeners.delete(listener);
-  }
-
-  notify() {
-    for (const listener of this.listeners) {
-      try {
-        listener(this.session, this.config);
-      } catch (err) {
-        console.warn('[AuthService] Error en listener:', err);
-      }
-    }
-  }
-
-  // =========================================================================
-  // Configuración de Conectividad (Base URL + Proxy CORS)
-  // =========================================================================
-  normalizeBaseUrl(url) {
-    if (!url || typeof url !== 'string' || !url.trim() || url.includes('test.idempiere.org')) {
-      return GARDENWORLD_DEMO_PRESET.baseUrl;
-    }
-    let cleaned = url.trim().replace(/\/+$/, '');
-    if (cleaned.includes('test.idempiere.org')) {
-      return GARDENWORLD_DEMO_PRESET.baseUrl;
-    }
-    if (!/^https?:\/\//i.test(cleaned)) {
-      const isLocal = /^(localhost|127\.0\.0\.1)(:|\/|$)/i.test(cleaned);
-      cleaned = `${isLocal ? 'http' : 'https'}://${cleaned}`;
-    }
-    return cleaned;
-  }
-
-  loadConnectionConfig(defaults) {
-    try {
-      const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(this.configStorageKey) : null;
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        const resolvedBaseUrl = this.normalizeBaseUrl(parsed.baseUrl || defaults.baseUrl);
-        const nextConfig = {
-          ...defaults,
-          ...parsed,
-          baseUrl: resolvedBaseUrl,
-          defaultParameters: {
-            ...(defaults.defaultParameters || {}),
-            ...(parsed.defaultParameters || {})
-          }
-        };
-        // Auto-sanar localStorage si contenía el servidor test.idempiere.org que está caído
-        if (parsed.baseUrl && parsed.baseUrl.includes('test.idempiere.org')) {
-          try {
-            localStorage.setItem(this.configStorageKey, JSON.stringify(nextConfig));
-          } catch {}
+    switch (mode) {
+      case PROXY_MODES.LOCAL:
+        return `/api/idempiere-proxy?target=${encodeURIComponent(targetUrl)}`;
+      case PROXY_MODES.ALLORIGINS:
+        return `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`;
+      case PROXY_MODES.CORSPROXY:
+        if (proxyConfig?.apiKey) {
+          return `https://corsproxy.io/?key=${encodeURIComponent(proxyConfig.apiKey)}&url=${encodeURIComponent(targetUrl)}`;
         }
-        return nextConfig;
-      }
-    } catch {
-      // Ignorar errores de almacenamiento corrupto
-    }
-    return { ...defaults, baseUrl: this.normalizeBaseUrl(defaults.baseUrl) };
-  }
-
-  getConnectionConfig() {
-    return {
-      ...this.config,
-      defaultParameters: { ...(this.config.defaultParameters || GARDENWORLD_DEMO_PRESET.parameters) }
-    };
-  }
-
-  setConnectionConfig(partial = {}) {
-    this.config = {
-      ...this.config,
-      ...partial,
-      baseUrl: this.normalizeBaseUrl(partial.baseUrl ?? this.config.baseUrl),
-      defaultParameters: {
-        ...(this.config.defaultParameters || GARDENWORLD_DEMO_PRESET.parameters),
-        ...(partial.defaultParameters || {})
-      }
-    };
-    try {
-      if (typeof localStorage !== 'undefined') {
-        localStorage.setItem(this.configStorageKey, JSON.stringify(this.config));
-      }
-    } catch {
-      // Ignorar si storage no está disponible
-    }
-    this.notify();
-    return this.getConnectionConfig();
-  }
-
-  resolveUrl(endpointPath, overrideConfig = null) {
-    const cfg = overrideConfig ? { ...this.config, ...overrideConfig } : this.config;
-    const base = this.normalizeBaseUrl(cfg.baseUrl);
-    const normalizedPath = endpointPath.startsWith('/') ? endpointPath : `/${endpointPath}`;
-    const directTarget = `${base}${normalizedPath}`;
-
-    if (!cfg.corsProxyEnabled) {
-      return { requestUrl: directTarget, targetUrl: directTarget, viaProxy: false };
-    }
-
-    if (cfg.corsProxyMode === CORS_PROXY_PRESETS.LOCAL) {
-      return {
-        requestUrl: `${this.localProxyPath}?url=${encodeURIComponent(directTarget)}`,
-        targetUrl: directTarget,
-        viaProxy: true,
-        proxyType: CORS_PROXY_PRESETS.LOCAL
-      };
-    }
-
-    const proxyPrefix =
-      cfg.corsProxyMode === CORS_PROXY_PRESETS.CORSPROXY_IO
-        ? 'https://corsproxy.io/?'
-        : (cfg.corsProxyCustomUrl || 'https://corsproxy.io/?').trim();
-
-    const proxiedUrl = proxyPrefix.includes('?') || proxyPrefix.endsWith('=')
-      ? `${proxyPrefix}${encodeURIComponent(directTarget)}`
-      : `${proxyPrefix.replace(/\/+$/, '')}/${directTarget}`;
-
-    return {
-      requestUrl: proxiedUrl,
-      targetUrl: directTarget,
-      viaProxy: true,
-      proxyType: cfg.corsProxyMode
-    };
-  }
-
-  // =========================================================================
-  // Utilidades JWT & Parseo de Respuestas iDempiere
-  // =========================================================================
-  decodeJwt(token) {
-    if (!token || typeof token !== 'string') return null;
-    const parts = token.split('.');
-    if (parts.length !== 3) return null;
-    try {
-      const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-      const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4);
-      const binary = atob(padded);
-      const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
-      const json = new TextDecoder().decode(bytes);
-      return JSON.parse(json);
-    } catch {
-      return null;
+        // Fallback transparente: corsproxy.io sin API key devuelve HTTP 403 (keyless_legacy_url).
+        // Usamos el Proxy Local como fallback seguro.
+        console.warn('corsproxy.io requiere API Key; conmutando automáticamente al Proxy Local backend.');
+        return `/api/idempiere-proxy?target=${encodeURIComponent(targetUrl)}`;
+      case PROXY_MODES.CUSTOM:
+        if (proxyConfig?.customUrl) {
+          const prefix = proxyConfig.customUrl.endsWith('?') 
+            ? proxyConfig.customUrl 
+            : `${proxyConfig.customUrl}?target=`;
+          return `${prefix}${encodeURIComponent(targetUrl)}`;
+        }
+        return targetUrl;
+      case PROXY_MODES.NONE:
+      default:
+        return targetUrl;
     }
   }
 
-  isTokenExpired(token) {
-    const claims = this.decodeJwt(token);
-    if (!claims || !claims.exp) return false;
-    return Math.floor(Date.now() / 1000) >= Number(claims.exp);
-  }
-
-  async safeReadResponse(response) {
-    const text = await response.text();
-    if (!text) return {};
-    try {
-      return JSON.parse(text);
-    } catch {
-      return { message: text };
-    }
-  }
-
-  extractArray(data, candidateKeys = []) {
-    if (Array.isArray(data)) return data;
-    if (!data || typeof data !== 'object') return [];
-    for (const key of candidateKeys) {
-      if (Array.isArray(data[key])) return data[key];
-    }
-    return [];
-  }
-
-  normalizeNamedList(items) {
-    return items.map((item) => ({
-      id: item.id !== undefined ? Number(item.id) : item.AD_Client_ID ?? item.AD_Role_ID ?? item.AD_Org_ID ?? item.M_Warehouse_ID,
-      name: item.name || item.Name || item.label || `ID ${item.id}`,
-      description: item.description || ''
-    })).filter((item) => item.id !== undefined && !Number.isNaN(item.id));
-  }
-
-  normalizeLanguagesList(data) {
-    const rawList = this.extractArray(data, ['languages', 'records', 'data']);
-    if (rawList.length > 0) {
-      return rawList
-        .map((lang) => {
-          if (typeof lang === 'string') return { code: lang, name: lang };
-          const code = lang.language || lang.AD_Language || lang.code || lang.id;
-          const name = lang.name || lang.Name || code;
-          return code ? { code, name } : null;
-        })
-        .filter(Boolean);
-    }
-    if (data && typeof data === 'object' && (data.language || data.AD_Language)) {
-      const code = data.language || data.AD_Language;
-      return [{ code, name: data.name || code }, ...DEFAULT_LANGUAGES.filter((l) => l.code !== code)];
-    }
-    return DEFAULT_LANGUAGES;
-  }
-
-  buildHttpError(status, data, targetUrl) {
-    const detail = data?.detail || data?.message || data?.error || data?.title || null;
-    let message = `No se pudo completar la autenticación (código ${status}).`;
-    if (status === 400) message = 'Los datos de acceso o sede proporcionados no son válidos.';
-    if (status === 401) message = 'Usuario o contraseña incorrectos, o sesión expirada.';
-    if (status === 403) message = 'Tu cuenta no cuenta con permisos para la sede u organización seleccionada.';
-    if (status === 404) message = 'El servicio de autenticación no respondió en la dirección configurada.';
-
-    const err = new Error(message);
-    err.status = status;
-    err.detail = detail;
-    err.targetUrl = targetUrl;
-    err.raw = data;
-    return err;
-  }
-
-  buildNetworkError(err, viaProxy, targetUrl) {
-    const hint = viaProxy
-      ? 'No se pudo establecer comunicación con el servicio de autenticación a través del puente de red.'
-      : 'No se pudo conectar con el servidor de autenticación. Verifica tu red o habilita el puente de conexión en opciones avanzadas.';
-    const wrapped = new Error(hint);
-    wrapped.status = 0;
-    wrapped.detail = err?.message || 'Network / CORS error';
-    wrapped.targetUrl = targetUrl;
-    return wrapped;
-  }
-
-  async requestJson(endpointPath, { method = 'GET', body = null, token = null, connectionConfig = null, timeoutMs = 15000 } = {}) {
-    const { requestUrl, targetUrl, viaProxy } = this.resolveUrl(endpointPath, connectionConfig);
+  /**
+   * Encabezados HTTP obligatorios para iDempiere REST API
+   * @param {string} [token] - Bearer token opcional
+   * @returns {HeadersInit}
+   */
+  static getHeaders(token = null) {
     const headers = {
       'Content-Type': 'application/json',
       'Accept': 'application/json'
     };
     if (token) {
-      headers.Authorization = `Bearer ${token}`;
+      headers['Authorization'] = `Bearer ${token}`;
     }
+    return headers;
+  }
 
-    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-    const timeoutId = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+  /**
+   * Modalidad 1: Login Directo / 1 Paso (Acceso Rapido)
+   * Envia en una sola peticion las credenciales y el objeto parameters.
+   * Cumple la directiva estricta de iDempiere: POST /api/v1/auth/tokens
+   * 
+   * @param {Object} credentials - { userName, password }
+   * @param {Object} parameters - { clientId, roleId, organizationId, warehouseId, language }
+   * @param {Object} options - { baseUrl, proxyConfig }
+   * @returns {Promise<Object>} Datos de sesion contextualizados
+   */
+  static async loginDirect(credentials, parameters, options = {}) {
+    const url = this.buildUrl(options.baseUrl, '/api/v1/auth/tokens', options.proxyConfig);
 
-    try {
-      const startTime = Date.now();
-      const response = await fetch(requestUrl, {
-        method,
-        headers,
-        body: body ? JSON.stringify(body) : undefined,
-        signal: controller ? controller.signal : undefined
-      });
-      if (timeoutId) clearTimeout(timeoutId);
-
-      const latencyMs = Date.now() - startTime;
-      const data = await this.safeReadResponse(response);
-
-      if (!response.ok) {
-        throw this.buildHttpError(response.status, data, targetUrl);
+    // BLINDADO TECNICO: El objeto organizationId debe llamarse 'organizationId' (NUNCA orgId)
+    // y debe estar estrictamente dentro de "parameters"
+    const payload = {
+      userName: credentials.userName?.trim(),
+      password: credentials.password,
+      parameters: {
+        clientId: Number(parameters.clientId),
+        roleId: Number(parameters.roleId),
+        organizationId: Number(parameters.organizationId ?? parameters.orgId),
+        warehouseId: Number(parameters.warehouseId),
+        language: parameters.language || 'en_US'
       }
-
-      return { data, status: response.status, latencyMs, targetUrl, viaProxy };
-    } catch (err) {
-      if (timeoutId) clearTimeout(timeoutId);
-      if (err.status !== undefined) throw err;
-      throw this.buildNetworkError(err, viaProxy, targetUrl);
-    }
-  }
-
-  // =========================================================================
-  // Validación estricta de payload iDempiere v1
-  // =========================================================================
-  buildOneStepPayload({ userName, password, parameters = {} }) {
-    if (!userName || !String(userName).trim()) {
-      throw new Error('El campo "userName" es obligatorio.');
-    }
-    if (!password) {
-      throw new Error('El campo "password" es obligatorio.');
-    }
-
-    // Regla estricta: organizationId (NUNCA orgId) dentro de objeto anidado parameters
-    const organizationId = parameters.organizationId !== undefined
-      ? Number(parameters.organizationId)
-      : Number(parameters.orgId ?? 0);
-
-    const parsedParams = {
-      clientId: Number(parameters.clientId),
-      roleId: Number(parameters.roleId),
-      organizationId,
-      language: parameters.language || 'en_US'
     };
 
-    if (parameters.warehouseId !== undefined && parameters.warehouseId !== null && parameters.warehouseId !== '') {
-      const whNum = Number(parameters.warehouseId);
-      if (!Number.isNaN(whNum)) parsedParams.warehouseId = whNum;
-    }
+    const startTime = Date.now();
+    let response;
+    let data;
 
-    if (Number.isNaN(parsedParams.clientId) || Number.isNaN(parsedParams.roleId) || Number.isNaN(parsedParams.organizationId)) {
-      throw new Error('Los IDs de Client, Role y Organization deben ser numéricos válidos.');
-    }
-
-    return {
-      userName: String(userName).trim(),
-      password: String(password),
-      parameters: parsedParams
-    };
-  }
-
-  buildStepTwoParameters(parameters = {}) {
-    const organizationId = parameters.organizationId !== undefined
-      ? Number(parameters.organizationId)
-      : Number(parameters.orgId ?? 0);
-
-    const body = {
-      clientId: Number(parameters.clientId),
-      roleId: Number(parameters.roleId),
-      organizationId,
-      language: parameters.language || 'en_US'
-    };
-
-    if (parameters.warehouseId !== undefined && parameters.warehouseId !== null && parameters.warehouseId !== '') {
-      const whNum = Number(parameters.warehouseId);
-      if (!Number.isNaN(whNum)) body.warehouseId = whNum;
-    }
-
-    return body;
-  }
-
-  // =========================================================================
-  // Modalidad 1: Login Directo / 1 Paso (POST /api/v1/auth/tokens)
-  // =========================================================================
-  async loginDirect({ userName, password, parameters, baseUrl, corsProxy, labels = {} }) {
-    const connectionOverride = {
-      ...(baseUrl ? { baseUrl } : {}),
-      ...(corsProxy || {})
-    };
-    const payload = this.buildOneStepPayload({ userName, password, parameters });
-
-    const { data, latencyMs, targetUrl, viaProxy } = await this.requestJson('/api/v1/auth/tokens', {
-      method: 'POST',
-      body: payload,
-      connectionConfig: connectionOverride
-    });
-
-    const token = data.token || data.access_token;
-    if (!token || typeof token !== 'string') {
-      throw new Error('El servidor respondió sin un token de sesión válido.');
-    }
-
-    return this.persistSessionFromAuth({
-      token,
-      refreshToken: data.refresh_token || data.refreshToken || null,
-      responseData: data,
-      userName: payload.userName,
-      parameters: payload.parameters,
-      labels,
-      authMode: 'one_step',
-      targetUrl,
-      viaProxy,
-      latencyMs,
-      connectionOverride
-    });
-  }
-
-  // =========================================================================
-  // Modalidad 2: Login Asistido en 2 Pasos (Multitenant Dinámico)
-  // =========================================================================
-  async loginStepOne({ userName, password, baseUrl, corsProxy }) {
-    if (!userName || !String(userName).trim() || !password) {
-      throw new Error('Debes ingresar usuario y contraseña para iniciar la validación.');
-    }
-
-    const connectionOverride = {
-      ...(baseUrl ? { baseUrl } : {}),
-      ...(corsProxy || {})
-    };
-
-    const { data, latencyMs, targetUrl, viaProxy } = await this.requestJson('/api/v1/auth/tokens', {
-      method: 'POST',
-      body: {
-        userName: String(userName).trim(),
-        password: String(password)
-      },
-      connectionConfig: connectionOverride
-    });
-
-    const tempToken = data.token || data.access_token;
-    if (!tempToken) {
-      throw new Error('No se recibió el token de verificación inicial.');
-    }
-
-    const claims = this.decodeJwt(tempToken);
-    const clients = this.normalizeNamedList(this.extractArray(data, ['clients']));
-
-    // Si Paso 1 devolvió roles directamente, usarlos; si no, consultar /api/v1/auth/roles
-    let roles = this.normalizeNamedList(this.extractArray(data, ['roles']));
-    let organizations = this.normalizeNamedList(this.extractArray(data, ['organizations']));
-    let warehouses = this.normalizeNamedList(this.extractArray(data, ['warehouses']));
-    let languages = this.extractArray(data, ['languages']).length > 0
-      ? this.normalizeLanguagesList(data)
-      : null;
-
-    const defaultClientId = clients[0]?.id ?? null;
-
-    if (roles.length === 0 && defaultClientId !== null) {
-      roles = await this.fetchRoles(tempToken, defaultClientId, connectionOverride);
-    }
-
-    const defaultRoleId = roles[0]?.id ?? null;
-    if (organizations.length === 0 && defaultClientId !== null && defaultRoleId !== null) {
-      organizations = await this.fetchOrganizations(tempToken, defaultClientId, defaultRoleId, connectionOverride);
-    }
-
-    // Seleccionar una organización inicial operativa válida (distinta de asterisco / 0 si hay sedes reales)
-    const nonStarOrg = organizations.find((o) => Number(o.id) !== 0) || organizations[0];
-    const defaultOrgId = nonStarOrg?.id ?? null;
-
-    if (defaultClientId !== null && defaultRoleId !== null && defaultOrgId !== null) {
-      warehouses = await this.fetchWarehouses(tempToken, defaultClientId, defaultRoleId, defaultOrgId, connectionOverride);
-    }
-
-    if (!languages) {
-      languages = await this.fetchLanguages(tempToken, connectionOverride);
-    }
-
-    return {
-      tempToken,
-      userName: String(userName).trim(),
-      userId: data.userId ?? data.AD_User_ID ?? claims?.AD_User_ID ?? claims?.userId ?? null,
-      clients,
-      roles,
-      organizations,
-      warehouses,
-      languages,
-      defaultParameters: {
-        clientId: defaultClientId,
-        roleId: defaultRoleId,
-        organizationId: defaultOrgId,
-        warehouseId: warehouses[0]?.id ?? '',
-        language: languages[0]?.code || 'en_US'
-      },
-      targetUrl,
-      viaProxy,
-      latencyMs
-    };
-  }
-
-  async fetchRoles(tempToken, clientId, connectionOverride = null) {
-    if (clientId === null || clientId === undefined || clientId === '') return [];
-    const { data } = await this.requestJson(`/api/v1/auth/roles?client=${encodeURIComponent(clientId)}`, {
-      method: 'GET',
-      token: tempToken,
-      connectionConfig: connectionOverride
-    });
-    return this.normalizeNamedList(this.extractArray(data, ['roles', 'records', 'data']));
-  }
-
-  async fetchOrganizations(tempToken, clientId, roleId, connectionOverride = null) {
-    if (clientId === null || roleId === null || clientId === '' || roleId === '') return [];
-    const query = `client=${encodeURIComponent(clientId)}&role=${encodeURIComponent(roleId)}`;
-    const { data } = await this.requestJson(`/api/v1/auth/organizations?${query}`, {
-      method: 'GET',
-      token: tempToken,
-      connectionConfig: connectionOverride
-    });
-    return this.normalizeNamedList(this.extractArray(data, ['organizations', 'records', 'data']));
-  }
-
-  async fetchWarehouses(tempToken, clientId, roleId, organizationId, connectionOverride = null) {
-    if (
-      clientId === null ||
-      clientId === undefined ||
-      clientId === '' ||
-      roleId === null ||
-      roleId === undefined ||
-      roleId === '' ||
-      organizationId === null ||
-      organizationId === undefined ||
-      organizationId === ''
-    ) {
-      return [];
-    }
-    const query = `client=${encodeURIComponent(clientId)}&role=${encodeURIComponent(roleId)}&organization=${encodeURIComponent(organizationId)}`;
     try {
-      const { data } = await this.requestJson(`/api/v1/auth/warehouses?${query}`, {
-        method: 'GET',
-        token: tempToken,
-        connectionConfig: connectionOverride
+      response = await fetch(url, {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify(payload)
       });
-      return this.normalizeNamedList(this.extractArray(data, ['warehouses', 'records', 'data']));
-    } catch (err) {
-      console.warn(`[AuthService] No se pudieron cargar almacenes para org ${organizationId}:`, err?.message || err);
-      return [];
-    }
-  }
-
-  async fetchLanguages(tempToken, connectionOverride = null) {
-    try {
-      const { data } = await this.requestJson('/api/v1/auth/language', {
-        method: 'GET',
-        token: tempToken,
-        connectionConfig: connectionOverride
-      });
-      return this.normalizeLanguagesList(data);
-    } catch {
-      return DEFAULT_LANGUAGES;
-    }
-  }
-
-  async loginStepTwo({ tempToken, parameters, userName, baseUrl, corsProxy, labels = {} }) {
-    if (!tempToken) {
-      throw new Error('Token temporal del Paso 1 no encontrado.');
+      data = await response.json().catch(() => null);
+    } catch (networkError) {
+      throw new Error(
+        `Error de red o CORS al contactar iDempiere (${url}). ` +
+        `Sugerencia: Activa el Proxy CORS o el Proxy Local en la barra superior. Detalle: ${networkError.message}`
+      );
     }
 
-    const connectionOverride = {
-      ...(baseUrl ? { baseUrl } : {}),
-      ...(corsProxy || {})
-    };
-    const putBody = this.buildStepTwoParameters(parameters);
+    const duration = Date.now() - startTime;
 
-    const { data, latencyMs, targetUrl, viaProxy } = await this.requestJson('/api/v1/auth/tokens', {
-      method: 'PUT',
-      token: tempToken,
-      body: putBody,
-      connectionConfig: connectionOverride
-    });
-
-    const finalToken = data.token || data.access_token;
-    if (!finalToken || typeof finalToken !== 'string') {
-      throw new Error('El servidor no devolvió el token de sesión definitivo.');
+    if (!response.ok) {
+      const errorMsg = data?.detail || data?.message || data?.title || `HTTP ${response.status} ${response.statusText}`;
+      const err = new Error(`Error en autenticacion iDempiere (${response.status}): ${errorMsg}`);
+      err.status = response.status;
+      err.data = data;
+      err.url = url;
+      throw err;
     }
 
-    return this.persistSessionFromAuth({
-      token: finalToken,
-      refreshToken: data.refresh_token || data.refreshToken || null,
-      responseData: data,
-      userName: userName || data.userName || 'Administrador',
-      parameters: putBody,
-      labels,
-      authMode: 'two_step',
-      targetUrl,
-      viaProxy,
-      latencyMs,
-      connectionOverride
-    });
-  }
-
-  // =========================================================================
-  // Gestión y Persistencia de Sesión Contextualizada
-  // =========================================================================
-  persistSessionFromAuth({
-    token,
-    refreshToken,
-    responseData,
-    userName,
-    parameters,
-    labels = {},
-    authMode,
-    targetUrl,
-    viaProxy,
-    latencyMs,
-    connectionOverride
-  }) {
-    const claims = this.decodeJwt(token) || {};
-
-    const userId = responseData?.userId ?? responseData?.AD_User_ID ?? claims.AD_User_ID ?? claims.userId ?? claims.sub ?? null;
-    const clientId = Number(responseData?.clientId ?? claims.AD_Client_ID ?? parameters.clientId);
-    const roleId = Number(responseData?.roleId ?? claims.AD_Role_ID ?? parameters.roleId);
-    const orgId = Number(responseData?.organizationId ?? responseData?.orgId ?? claims.AD_Org_ID ?? parameters.organizationId);
-    const rawWh = responseData?.warehouseId ?? claims.M_Warehouse_ID ?? parameters.warehouseId ?? null;
-    const warehouseId = rawWh !== null && rawWh !== '' && !Number.isNaN(Number(rawWh)) ? Number(rawWh) : null;
-    const language = responseData?.language ?? claims.AD_Language ?? parameters.language ?? 'en_US';
-
-    const effectiveCfg = this.setConnectionConfig(connectionOverride || {});
+    // Normalizar objeto de sesion
+    const token = data?.token;
+    if (!token) {
+      throw new Error('Respuesta de iDempiere no contiene token de autenticacion valido.');
+    }
 
     const session = {
       token,
-      refreshToken: refreshToken || null,
-      userId,
-      userName,
-      clientId,
-      roleId,
-      orgId,
-      organizationId: orgId,
-      warehouseId,
-      language,
-      clientName: labels.clientName || `Client #${clientId}`,
-      roleName: labels.roleName || `Role #${roleId}`,
-      orgName: labels.orgName || (orgId === 0 ? '*' : `Org #${orgId}`),
-      warehouseName: labels.warehouseName || (warehouseId !== null ? `Warehouse #${warehouseId}` : 'Sin Almacén'),
-      authMode,
-      endpoint: targetUrl,
-      baseUrl: effectiveCfg.baseUrl,
-      corsProxyEnabled: effectiveCfg.corsProxyEnabled,
-      corsProxyMode: effectiveCfg.corsProxyMode,
-      corsProxyCustomUrl: effectiveCfg.corsProxyCustomUrl,
-      viaProxy,
-      latencyMs,
-      claims,
-      expiresAt: claims.exp ? Number(claims.exp) * 1000 : null,
-      savedAt: Date.now()
+      userId: data.userId ?? data.user?.id ?? 101,
+      userName: credentials.userName,
+      password: credentials.password,
+      clientId: data.clientId ?? payload.parameters.clientId,
+      clientName: data.clientName ?? (payload.parameters.clientId === 11 ? 'GardenWorld' : `Client #${payload.parameters.clientId}`),
+      roleId: data.roleId ?? payload.parameters.roleId,
+      roleName: data.roleName ?? (payload.parameters.roleId === 102 ? 'GardenAdmin' : `Role #${payload.parameters.roleId}`),
+      orgId: data.organizationId ?? payload.parameters.organizationId,
+      organizationId: data.organizationId ?? payload.parameters.organizationId,
+      organizationName: data.organizationName ?? (payload.parameters.organizationId === 11 ? 'HQ - Headquarters' : `Org #${payload.parameters.organizationId}`),
+      warehouseId: data.warehouseId ?? payload.parameters.warehouseId,
+      warehouseName: data.warehouseName ?? (payload.parameters.warehouseId === 103 ? 'HQ Warehouse' : `Warehouse #${payload.parameters.warehouseId}`),
+      language: payload.parameters.language,
+      baseUrl: options.baseUrl || DEFAULT_DEMO_CONFIG.baseUrl,
+      loginAt: new Date().toISOString(),
+      rawResponse: data,
+      latencyMs: duration
     };
 
-    this.session = session;
-    this.saveSessionToStorage(session);
-    this.notify();
+    this.saveSession(session);
     return session;
   }
 
-  saveSessionToStorage(session) {
-    const serialized = JSON.stringify(session);
-    try {
-      if (typeof localStorage !== 'undefined') {
-        localStorage.setItem(this.sessionStorageKey, serialized);
-      }
-      if (typeof sessionStorage !== 'undefined') {
-        sessionStorage.setItem(this.sessionStorageKey, serialized);
-      }
-    } catch (err) {
-      console.warn('[AuthService] No se pudo guardar la sesión:', err);
-    }
-  }
+  /**
+   * Modalidad 2 - Paso 1: Validar credenciales de usuario para descubrir tenants, roles y orgs
+   * POST /api/v1/auth/tokens con solo userName y password
+   * 
+   * @param {Object} credentials - { userName, password }
+   * @param {Object} options - { baseUrl, proxyConfig }
+   * @returns {Promise<Object>} { token, clients, roles, raw }
+   */
+  static async loginStep1(credentials, options = {}) {
+    const url = this.buildUrl(options.baseUrl, '/api/v1/auth/tokens', options.proxyConfig);
 
-  loadSession() {
-    try {
-      const raw =
-        (typeof sessionStorage !== 'undefined' && sessionStorage.getItem(this.sessionStorageKey)) ||
-        (typeof localStorage !== 'undefined' && localStorage.getItem(this.sessionStorageKey));
-      if (!raw) return null;
-      const parsed = JSON.parse(raw);
-      if (!parsed || !parsed.token) return null;
-      if (this.isTokenExpired(parsed.token)) {
-        this.clearStorage();
-        return null;
-      }
-      return parsed;
-    } catch {
-      this.clearStorage();
-      return null;
-    }
-  }
-
-  clearStorage() {
-    try {
-      if (typeof localStorage !== 'undefined') localStorage.removeItem(this.sessionStorageKey);
-      if (typeof sessionStorage !== 'undefined') sessionStorage.removeItem(this.sessionStorageKey);
-    } catch {
-      // Ignorar errores de storage
-    }
-  }
-
-  getSession() {
-    if (this.session && this.isTokenExpired(this.session.token)) {
-      this.logout();
-      return null;
-    }
-    return this.session;
-  }
-
-  getToken() {
-    return this.getSession()?.token || null;
-  }
-
-  getContext() {
-    const s = this.getSession();
-    if (!s) return null;
-    return {
-      userId: s.userId,
-      clientId: s.clientId,
-      roleId: s.roleId,
-      orgId: s.orgId,
-      organizationId: s.organizationId,
-      warehouseId: s.warehouseId,
-      language: s.language
+    const payload = {
+      userName: credentials.userName?.trim(),
+      password: credentials.password
     };
-  }
 
-  isAuthenticated() {
-    const s = this.getSession();
-    return !!(s && s.token && !this.isTokenExpired(s.token));
-  }
+    let response;
+    let data;
 
-  getAuthHeaders() {
-    const token = this.getToken();
-    if (!token) return {};
-    return {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json',
-      'Accept': 'application/json'
-    };
-  }
-
-  async testConnection(overrideConfig = null) {
-    const { requestUrl, targetUrl, viaProxy, proxyType } = this.resolveUrl('/api/v1/auth/tokens', overrideConfig);
-    const startTime = Date.now();
     try {
-      const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-      const timeoutId = controller ? setTimeout(() => controller.abort(), 8000) : null;
-      const probeMethod = viaProxy && proxyType !== CORS_PROXY_PRESETS.LOCAL ? 'GET' : 'OPTIONS';
-      const res = await fetch(requestUrl, {
-        method: probeMethod,
-        headers: { 'Accept': 'application/json' },
-        signal: controller ? controller.signal : undefined
+      response = await fetch(url, {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify(payload)
       });
-      if (timeoutId) clearTimeout(timeoutId);
-      const latencyMs = Date.now() - startTime;
-      const reachable = res.status > 0 && res.status !== 404 && res.status < 500;
-      return {
-        online: reachable,
-        status: res.status,
-        latencyMs,
-        targetUrl,
-        viaProxy,
-        message: reachable
-          ? `Servicio de autenticación disponible (HTTP ${res.status}).`
-          : `El servidor respondió HTTP ${res.status} al verificar disponibilidad.`
-      };
-    } catch (err) {
-      return {
-        online: false,
-        status: 0,
-        latencyMs: Date.now() - startTime,
-        targetUrl,
-        viaProxy,
-        error: err.message,
-        message: viaProxy
-          ? `Sin respuesta del servidor vía puente de conexión (${err.message}).`
-          : `Error de red o CORS al consultar el servidor. Activa el puente de conexión en opciones avanzadas.`
-      };
+      data = await response.json().catch(() => null);
+    } catch (networkError) {
+      throw new Error(
+        `Error de red o CORS al contactar iDempiere (${url}). ` +
+        `Prueba activando el Proxy CORS. Detalle: ${networkError.message}`
+      );
+    }
+
+    if (!response.ok) {
+      const errorMsg = data?.detail || data?.message || `HTTP ${response.status} ${response.statusText}`;
+      const err = new Error(`Credenciales invalidas en iDempiere: ${errorMsg}`);
+      err.status = response.status;
+      err.data = data;
+      throw err;
+    }
+
+    return {
+      tempToken: data?.token,
+      clients: data?.clients || [],
+      roles: data?.roles || [],
+      organizations: data?.organizations || [],
+      warehouses: data?.warehouses || [],
+      raw: data
+    };
+  }
+
+  /**
+   * Modalidad 2 - Paso 2: Confirmar contexto seleccionado y obtener token definitivo
+   * Envia PUT con Bearer token a /api/v1/auth/tokens o POST con credenciales y contexto completo
+   * 
+   * @param {Object} credentials - { userName, password }
+   * @param {string} tempToken - Token temporal obtenido en Paso 1 (si aplica)
+   * @param {Object} selectedContext - { clientId, roleId, organizationId, warehouseId, language }
+   * @param {Object} options - { baseUrl, proxyConfig }
+   * @returns {Promise<Object>} Sesion final guardada
+   */
+  static async loginStep2(credentials, tempToken, selectedContext, options = {}) {
+    const url = this.buildUrl(options.baseUrl, '/api/v1/auth/tokens', options.proxyConfig);
+
+    const parameters = {
+      clientId: Number(selectedContext.clientId),
+      roleId: Number(selectedContext.roleId),
+      organizationId: Number(selectedContext.organizationId ?? selectedContext.orgId),
+      warehouseId: Number(selectedContext.warehouseId),
+      language: selectedContext.language || 'en_US'
+    };
+
+    // Intentamos primero la llamada de confirmacion PUT /api/v1/auth/tokens si existe tempToken
+    if (tempToken) {
+      try {
+        const putResponse = await fetch(url, {
+          method: 'PUT',
+          headers: this.getHeaders(tempToken),
+          body: JSON.stringify(parameters)
+        });
+
+        if (putResponse.ok) {
+          const putData = await putResponse.json().catch(() => null);
+          const finalToken = putData?.token || tempToken;
+          const session = {
+            token: finalToken,
+            userId: putData?.userId || null,
+            userName: credentials?.userName,
+            clientId: parameters.clientId,
+            clientName: selectedContext.clientName || `Client #${parameters.clientId}`,
+            roleId: parameters.roleId,
+            roleName: selectedContext.roleName || `Role #${parameters.roleId}`,
+            orgId: parameters.organizationId,
+            organizationId: parameters.organizationId,
+            organizationName: selectedContext.organizationName || `Org #${parameters.organizationId}`,
+            warehouseId: parameters.warehouseId,
+            warehouseName: selectedContext.warehouseName || `Warehouse #${parameters.warehouseId}`,
+            language: parameters.language,
+            baseUrl: options.baseUrl || DEFAULT_DEMO_CONFIG.baseUrl,
+            loginAt: new Date().toISOString(),
+            rawResponse: putData
+          };
+          this.saveSession(session);
+          return session;
+        }
+      } catch (err) {
+        console.warn('PUT /tokens no soportado o fallo, realizando fallback a POST directo:', err);
+      }
+    }
+
+    // Fallback robusto garantizado: Login directo con credenciales + parametros seleccionados
+    return this.loginDirect(credentials, parameters, options);
+  }
+
+  /**
+   * Guarda de forma persistente la sesion en localStorage y sessionStorage
+   * @param {Object} session 
+   */
+  static saveSession(session) {
+    try {
+      const serialized = JSON.stringify(session);
+      localStorage.setItem(STORAGE_KEY, serialized);
+      sessionStorage.setItem(STORAGE_KEY, serialized);
+    } catch (e) {
+      console.error('Error guardando sesion en almacenamiento local:', e);
     }
   }
 
-  logout() {
-    this.session = null;
-    this.clearStorage();
-    this.notify();
+  /**
+   * Obtiene la sesion activa actual
+   * @returns {Object|null}
+   */
+  static getSession() {
+    try {
+      const data = sessionStorage.getItem(STORAGE_KEY) || localStorage.getItem(STORAGE_KEY);
+      if (!data) return null;
+      return JSON.parse(data);
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Verifica si existe una sesion autenticada con token no nulo
+   * @returns {boolean}
+   */
+  static isAuthenticated() {
+    const session = this.getSession();
+    return Boolean(session && session.token);
+  }
+
+  /**
+   * Purga el estado de autenticacion
+   */
+  static logout() {
+    localStorage.removeItem(STORAGE_KEY);
+    sessionStorage.removeItem(STORAGE_KEY);
+  }
+
+  static clearSession() {
+    this.logout();
+  }
+
+  /**
+   * Configuracion de servidor y proxy guardada por el usuario
+   */
+  static getStoredConfig() {
+    try {
+      const conf = localStorage.getItem(CONFIG_KEY);
+      return conf ? JSON.parse(conf) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  static saveStoredConfig(config) {
+    try {
+      localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
+    } catch (e) {
+      console.error('Error guardando configuracion:', e);
+    }
+  }
+
+  /**
+   * Configuracion de Perfil de Administrador y parametros ERP (Imagen 4)
+   */
+  static getProfileConfig() {
+    try {
+      const conf = localStorage.getItem(PROFILE_CONFIG_KEY);
+      if (conf) {
+        return { ...DEFAULT_PROFILE_CONFIG, ...JSON.parse(conf) };
+      }
+    } catch {}
+    return { ...DEFAULT_PROFILE_CONFIG };
+  }
+
+  static saveProfileConfig(config) {
+    try {
+      localStorage.setItem(PROFILE_CONFIG_KEY, JSON.stringify(config));
+    } catch (e) {
+      console.error('Error guardando configuracion de perfil:', e);
+    }
   }
 }
 
-export const authService = new AuthService();
-export default authService;
+export function buildApiUrl(baseUrl, endpoint, proxyMode) {
+  return AuthService.buildUrl(baseUrl, endpoint, typeof proxyMode === 'string' ? { mode: proxyMode } : proxyMode);
+}
+
+export function getSession() {
+  return AuthService.getSession();
+}
+

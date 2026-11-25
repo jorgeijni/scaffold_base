@@ -4,14 +4,5 @@ import react from '@vitejs/plugin-react';
 // Crucial: base must match the subroute where Express serves the PWA
 export default defineConfig({
   plugins: [react()],
-  base: '/app/',
-  server: {
-    port: 5173,
-    proxy: {
-      '/api': {
-        target: 'http://localhost:3000',
-        changeOrigin: true
-      }
-    }
-  }
+  base: '/app/'
 });
